@@ -27,6 +27,7 @@ import {
   calculateSampleStdDev,
   roundMetric
 } from './statistics';
+import { isWitnessPanel } from './panelUtils';
 
 export const AGGREGATION_CALCULATION_VERSION = '1.1.0';
 

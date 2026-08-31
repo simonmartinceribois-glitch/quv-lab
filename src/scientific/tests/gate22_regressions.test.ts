@@ -57,10 +57,10 @@ export function runGate22RegressionTests(): {
     const trialId = `trial-gate22-test-${Date.now()}`;
     const stages = generateStandardExposureStages(trialId);
     const panels: PanelDefinition[] = [
-      { id: `${trialId}-p-1`, label: '1', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 1 },
-      { id: `${trialId}-p-2`, label: '2', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 2 },
-      { id: `${trialId}-p-3`, label: '3', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 3 },
-      { id: `${trialId}-p-T`, label: 'T', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 4 }
+      { id: `${trialId}-p-1`, label: '1', roleCode: 'E1', role: 'EXPOSED_1', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 1 },
+      { id: `${trialId}-p-2`, label: '2', roleCode: 'E2', role: 'EXPOSED_2', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 2 },
+      { id: `${trialId}-p-3`, label: '3', roleCode: 'E3', role: 'EXPOSED_3', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 3 },
+      { id: `${trialId}-p-T`, label: 'T', roleCode: 'T', role: 'WITNESS', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 4 }
     ];
 
     const batches: BatchDefinition[] = [
@@ -76,27 +76,38 @@ export function runGate22RegressionTests(): {
 
     const trial: Trial = {
       id: trialId,
+      schemaVersion: '1.2.0',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       status: 'IN_PROGRESS',
+      configurationStatus: 'LOCKED',
       metadata: {
         reference: 'TEST-GATE-2.2',
         title: 'Essai de validation GATE 2.2',
-        createdAt: new Date().toISOString(),
         createdBy: 'Test Automatisé'
       },
       config: {
-        selectedStandard: 'NF_EN_927_6_2018',
+        standardReference: 'NF EN 927-6',
         activeFamilies: ['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'],
-        ruleSetId: ruleSet.id,
-        repetitionCountByFamily: { COLOR: 4, GLOSS: 3, PERSOZ: 3, OBSERVATIONS: 1 },
-        colorSystem: 'CIELAB',
-        stdDevCalculationMethod: 'SAMPLE_N_MINUS_1',
-        glossGeometry: '60_DEGREE',
-        woodSpecies: 'Pin'
+        familyConfigs: {
+          COLOR: { familyId: 'COLOR', enabled: true },
+          GLOSS: { familyId: 'GLOSS', enabled: true },
+          PERSOZ: { familyId: 'PERSOZ', enabled: true },
+          OBSERVATIONS: { familyId: 'OBSERVATIONS', enabled: true }
+        }
+      },
+      scheduleConfig: {
+        cycleDurationHours: 168,
+        maxCycles: 12,
+        initialStage: { exposureHours: 0, mandatory: true, label: 'T0' },
+        intermediateCycles: Array.from({ length: 11 }, (_, i) => ({ cycleIndex: i + 1, mandatory: true })),
+        finalCycle: { cycleIndex: 12, mandatory: true }
       },
       stages,
       batches,
       acquisitions: {},
       mediaReferences: [],
+      auditTrail: [],
       auditEvents: []
     };
 
@@ -144,25 +155,29 @@ export function runGate22RegressionTests(): {
         id: `acq-${idx}`,
         trialId: mock.id,
         stageId: stageT0.id,
+        batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'COLOR',
-        measuredAt: new Date().toISOString(),
-        operatorId: 'Tester',
-        status: 'VALIDATED',
         raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
-        computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+        computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+        status: 'VALIDATED',
+        alerts: [],
+        trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+        mediaIds: []
       };
       mock.acquisitions[`${stageT0.id}__${pId}__GLOSS`] = {
         id: `acq-g-${idx}`,
         trialId: mock.id,
         stageId: stageT0.id,
+        batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'GLOSS',
-        measuredAt: new Date().toISOString(),
-        operatorId: 'Tester',
-        status: 'VALIDATED',
         raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
-        computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' }
+        computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
+        status: 'VALIDATED',
+        alerts: [],
+        trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+        mediaIds: []
       };
     });
 
@@ -172,25 +187,29 @@ export function runGate22RegressionTests(): {
       id: 'acq-t0-T',
       trialId: mock.id,
       stageId: stageT0.id,
+      batchId: mock.batches[0].id,
       panelId: pT,
       familyId: 'COLOR',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
-      status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
-      computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+      computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+      status: 'VALIDATED',
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
     mock.acquisitions[`${stageT0.id}__${pT}__GLOSS`] = {
       id: 'acq-gt0-T',
       trialId: mock.id,
       stageId: stageT0.id,
+      batchId: mock.batches[0].id,
       panelId: pT,
       familyId: 'GLOSS',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
-      status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
-      computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' }
+      computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
+      status: 'VALIDATED',
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
 
     // Injecter des données pour C1 (168h)
@@ -201,25 +220,29 @@ export function runGate22RegressionTests(): {
         id: `acq-c1-${idx}`,
         trialId: mock.id,
         stageId: stageC1.id,
+        batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'COLOR',
-        measuredAt: new Date().toISOString(),
-        operatorId: 'Tester',
-        status: 'VALIDATED',
         raw: { readings: [{ pointIndex: 1, L: 56, a: 0, b: 0 }] },
-        computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 6.0, deltaL: 6.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+        computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 6.0, deltaL: 6.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+        status: 'VALIDATED',
+        alerts: [],
+        trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+        mediaIds: []
       };
       mock.acquisitions[`${stageC1.id}__${pId}__GLOSS`] = {
         id: `acq-gc1-${idx}`,
         trialId: mock.id,
         stageId: stageC1.id,
+        batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'GLOSS',
-        measuredAt: new Date().toISOString(),
-        operatorId: 'Tester',
-        status: 'VALIDATED',
         raw: { readings: [{ pointIndex: 1, gloss60: 30 }] },
-        computed: { meanGloss: 30, glossVariation: -30, glossRetentionPercent: 50, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' }
+        computed: { meanGloss: 30, deltaGloss: -30, retentionRatePercent: 50, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
+        status: 'VALIDATED',
+        alerts: [],
+        trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+        mediaIds: []
       };
     });
 
@@ -228,25 +251,29 @@ export function runGate22RegressionTests(): {
       id: 'acq-c1-T',
       trialId: mock.id,
       stageId: stageC1.id,
+      batchId: mock.batches[0].id,
       panelId: pT,
       familyId: 'COLOR',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
-      status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, L: 50.1, a: 0, b: 0 }] },
-      computed: { meanL: 50.1, meanA: 0, meanB: 0, deltaE: 0.1, deltaL: 0.1, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+      computed: { meanL: 50.1, meanA: 0, meanB: 0, deltaE: 0.1, deltaL: 0.1, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+      status: 'VALIDATED',
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
     mock.acquisitions[`${stageC1.id}__${pT}__GLOSS`] = {
       id: 'acq-gc1-T',
       trialId: mock.id,
       stageId: stageC1.id,
+      batchId: mock.batches[0].id,
       panelId: pT,
       familyId: 'GLOSS',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
-      status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
-      computed: { meanGloss: 60, glossVariation: 0, glossRetentionPercent: 100, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' }
+      computed: { meanGloss: 60, deltaGloss: 0, retentionRatePercent: 100, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
+      status: 'VALIDATED',
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
 
     const kinetics = extractTemporalKinetics(mock, mock.batches[0].id);
@@ -280,13 +307,15 @@ export function runGate22RegressionTests(): {
         id: `acq-c1-${idx}`,
         trialId: mock.id,
         stageId: stageC1.id,
+        batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'COLOR',
-        measuredAt: new Date().toISOString(),
-        operatorId: 'Tester',
         status: 'VALIDATED',
         raw: { readings: [{ pointIndex: 1, L: 56, a: 0, b: 0 }] },
-        computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 8.0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+        computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 8.0, deltaL: 8.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+        alerts: [],
+        trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+        mediaIds: []
       };
     });
     // Témoin avec deltaE = 0
@@ -294,26 +323,28 @@ export function runGate22RegressionTests(): {
       id: 'acq-c1-T',
       trialId: mock.id,
       stageId: stageC1.id,
+      batchId: mock.batches[0].id,
       panelId: `${mock.id}-p-T`,
       familyId: 'COLOR',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
       status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
-      computed: { meanL: 50, meanA: 0, meanB: 0, deltaE: 0.0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+      computed: { meanL: 50, meanA: 0, meanB: 0, deltaE: 0.0, deltaL: 0.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
 
     const comp = compareSystemsAtStage(mock, stageC1.id, ruleSet);
     const item = comp.items[0];
-    const passed = item && Math.abs((item.meanDeltaE ?? 0) - 8.0) < 0.001;
+    const passed = item && item.color && Math.abs((item.color.meanDeltaE ?? 0) - 8.0) < 0.001;
 
     record(
       'A3',
       'MultiSystemComparator calcule la moyenne uniquement sur les éprouvettes exposées',
       'TEST_A_TEMOIN',
       Boolean(passed),
-      'item.meanDeltaE = 8.00',
-      `item.meanDeltaE = ${item?.meanDeltaE}`
+      'item.color.meanDeltaE = 8.00',
+      `item.color.meanDeltaE = ${item?.color?.meanDeltaE}`
     );
   }
 
@@ -357,37 +388,62 @@ export function runGate22RegressionTests(): {
   {
     const mock = createMockTrial();
     const stageC2 = mock.stages[2]; // 336h
+    console.log(`\n[DEBUG B2] Initial C2 status: ${stageC2.status}`);
     // Ajouter une acquisition sur C2
     mock.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`] = {
       id: 'acq-c2-test',
       trialId: mock.id,
       stageId: stageC2.id,
+      batchId: mock.batches[0].id,
       panelId: mock.batches[0].panels[0].id,
       familyId: 'COLOR',
-      measuredAt: new Date().toISOString(),
-      operatorId: 'Tester',
       status: 'VALIDATED',
       raw: { readings: [{ pointIndex: 1, L: 52, a: 1, b: 2 }] },
-      computed: { meanL: 52, meanA: 1, meanB: 2, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' }
+      computed: { meanL: 52, meanA: 1, meanB: 2, deltaE: 2, deltaL: 2, deltaA: 1, deltaB: 2, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
+      alerts: [],
+      trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
+      mediaIds: []
     };
     globalTrialStore.saveTrial(mock);
 
+    // Check initial status for debugging
+    const savedTrial = globalTrialStore.getTrial(mock.id);
+    const savedStageC2 = savedTrial?.stages.find((s) => s.id === stageC2.id);
+    const initialStatus = savedStageC2?.status;
+    console.log(`[DEBUG B2] Saved C2 status: ${initialStatus}`);
+
     // 1. Désactiver C2
-    const updatedInactive = globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Protocole allégé');
-    const stInactive = updatedInactive.stages.find((s) => s.id === stageC2.id);
-    const activeStagesAfterDeact = getActiveStages(updatedInactive.stages);
-    const isAcquisitionPreserved = Boolean(updatedInactive.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`]);
+    console.log(`[DEBUG B2] Calling toggleStageStatus to deactivate C2...`);
+    globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Protocole allégé');
+    // Get fresh copy of trial to avoid reference mutation issues
+    let currentTrial = globalTrialStore.getTrial(mock.id);
+    if (!currentTrial) throw new Error('Trial not found after deactivation');
+    let stageC2Fresh = currentTrial.stages.find((s) => s.id === stageC2.id);
+    console.log(`[DEBUG B2] After toggle - C2 status: ${stageC2Fresh?.status}`);
+    // CAPTURE the status VALUES, not the objects
+    const inactiveStatus = stageC2Fresh?.status;
+    const activeStagesAfterDeact = getActiveStages(currentTrial.stages);
+    const isAcquisitionPreserved = Boolean(currentTrial.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`]);
+    console.log(`[DEBUG B2] Acquisition preserved: ${isAcquisitionPreserved}`);
+    console.log(`[DEBUG B2] Active stages after deactivation: ${activeStagesAfterDeact.map(s => `${s.cycleIndex}(${s.status})`).join(',')}`);
 
     // 2. Réactiver C2
-    const updatedReactivated = globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Réactivation');
-    const stActive = updatedReactivated.stages.find((s) => s.id === stageC2.id);
-    const activeStagesAfterReact = getActiveStages(updatedReactivated.stages);
+    console.log(`[DEBUG B2] Calling toggleStageStatus to reactivate C2...`);
+    globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Réactivation');
+    // Get fresh copy of trial again
+    currentTrial = globalTrialStore.getTrial(mock.id);
+    if (!currentTrial) throw new Error('Trial not found after reactivation');
+    stageC2Fresh = currentTrial.stages.find((s) => s.id === stageC2.id);
+    console.log(`[DEBUG B2] After reactivation - C2 status: ${stageC2Fresh?.status}`);
+    const reactivatedStatus = stageC2Fresh?.status;
+    const activeStagesAfterReact = getActiveStages(currentTrial.stages);
+    console.log(`[DEBUG B2] Active stages after reactivation: ${activeStagesAfterReact.map(s => `${s.cycleIndex}(${s.status})`).join(',')}`);
 
     const passed =
-      stInactive?.status === 'INACTIVE' &&
+      inactiveStatus === 'INACTIVE' &&
       !activeStagesAfterDeact.some((s) => s.id === stageC2.id) &&
       isAcquisitionPreserved &&
-      stActive?.status !== 'INACTIVE' &&
+      reactivatedStatus !== 'INACTIVE' &&
       activeStagesAfterReact.some((s) => s.id === stageC2.id);
 
     record(
@@ -396,7 +452,7 @@ export function runGate22RegressionTests(): {
       'TEST_B_JALONS',
       passed,
       'INACTIVE -> getActiveStages exclut C2 -> Réactivation -> données intactes',
-      `Inactive status: ${stInactive?.status}, Données conservées: ${isAcquisitionPreserved}, Reactivated status: ${stActive?.status}`
+      `Inactive status: ${inactiveStatus}, Données conservées: ${isAcquisitionPreserved}, Reactivated status: ${reactivatedStatus}`
     );
   }
 
@@ -466,12 +522,16 @@ export function runGate22RegressionTests(): {
 
   // Test D1 : Vérification de l'absence de NF EN 927-3:2019 dans le moteur QUV
   {
-    const rules = ruleSet.rules;
-    const hasEn927_6 = rules.some((r) => r.origin === 'NF_EN_927_6_2018');
-    const hasEn927_3 = rules.some((r) => (r.origin as any) === 'NF_EN_927_3_2019' || (r.origin as any) === 'NF_EN_927_3');
-    const labRulesAreClassified = rules
-      .filter((r) => r.origin === 'LAB_RECOMMENDATION')
-      .every((r) => r.ruleSource === 'LABORATORY');
+    const allConfigs = [
+      ...Object.values(ruleSet.measurementConfigurations || {}),
+      ...Object.values(ruleSet.seriesConfigurations || {})
+    ];
+
+    const hasEn927_6 = allConfigs.some((c: any) => (c.origin as any) === 'NORMATIVE_REQUIREMENT' || (c.origin as any) === 'NF_EN_927_6_2018');
+    const hasEn927_3 = allConfigs.some((c: any) => (c.origin as any) === 'NF_EN_927_3_2019' || (c.origin as any) === 'NF_EN_927_3');
+    const labRulesAreClassified = Object.values(ruleSet.measurementConfigurations || {})
+      .filter((c: any) => c.origin === 'LAB_RECOMMENDATION')
+      .every((c: any) => c.ruleSource === 'LABORATORY' || c.ruleSource === 'LAB_RECOMMENDATION');
 
     const passed = hasEn927_6 && !hasEn927_3 && labRulesAreClassified;
 
