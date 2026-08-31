@@ -1589,63 +1589,57 @@ export class TrialStoreService {
 
   /**
    * Associe une photographie en garantissant l'unicité stricte du cliché actif par (panelId + stageId).
-   * Si une photo existe déjà, replaceExisting doit valoir true pour archiver l'ancien cliché dans l'historique.
+   * Si une photo existe déjà, elle est automatiquement archivée de façon non-destructive.
    */
   public attachPhoto(params: {
-    trialId: UUID;
-    panelId?: UUID;
-    stageId?: UUID;
-    filename: string;
-    caption: string;
-    operatorId: string;
-    storageKey?: string;
-    replaceExisting?: boolean;
-  }): { trial: Trial; media: MediaReference; replacedMediaId?: string } {
-    const trial = this.getTrial(params.trialId);
-    if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
+   trialId: UUID;
+   panelId?: UUID;
+   stageId?: UUID;
+   filename: string;
+   caption?: string;
+   operatorId: string;
+   storageKey?: string;
+   replaceExisting?: boolean;
+  }): Trial {
+   const trial = this.getTrial(params.trialId);
+   if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
 
-    const now = new Date().toISOString();
-    let replacedMediaId: string | undefined;
+   const now = new Date().toISOString();
+   let replacedMediaId: string | undefined;
 
-    // Vérifier si une photo active existe déjà pour ce couple (panelId, stageId)
-    if (params.panelId && params.stageId) {
-      const existingActivePhoto = trial.mediaReferences.find(
-        (m) =>
-          m.type === 'PHOTO' &&
-          m.status !== 'ARCHIVED' &&
-          m.panelId === params.panelId &&
-          m.stageId === params.stageId
-      );
+   // Vérifier si une photo active existe déjà pour ce couple (panelId, stageId)
+   if (params.panelId && params.stageId) {
+     const existingActivePhoto = trial.mediaReferences.find(
+       (m) =>
+         m.type === 'PHOTO' &&
+         m.status !== 'ARCHIVED' &&
+         m.panelId === params.panelId &&
+         m.stageId === params.stageId
+     );
 
-      if (existingActivePhoto) {
-        if (!params.replaceExisting) {
-          throw new Error(
-            'Une photographie existe déjà pour cet échantillon à cette étape.'
-          );
-        }
+     if (existingActivePhoto) {
+       // Archivage automatique et non destructif de l'ancienne photo dans l'historique
+       existingActivePhoto.status = 'ARCHIVED';
+       existingActivePhoto.replacedAt = now;
+       existingActivePhoto.replacedBy = params.operatorId || 'OPERATOR';
+       replacedMediaId = existingActivePhoto.id;
 
-        // Archivage non destructif de l'ancienne photo dans l'historique
-        existingActivePhoto.status = 'ARCHIVED';
-        existingActivePhoto.replacedAt = now;
-        existingActivePhoto.replacedBy = params.operatorId || 'OPERATOR';
-        replacedMediaId = existingActivePhoto.id;
-
-        trial.auditTrail.push({
-          id: generateUUID(),
-          trialId: params.trialId,
-          timestamp: now,
-          operatorId: params.operatorId || 'OPERATOR',
-          action: 'REPLACE_PHOTO',
-          entityType: 'PANEL',
-          entityId: params.panelId,
-          details: {
-            oldMediaId: existingActivePhoto.id,
-            stageId: params.stageId,
-            reason: 'Remplacement de photographie active par un nouveau cliché'
-          }
-        });
-      }
-    }
+       trial.auditTrail.push({
+         id: generateUUID(),
+         trialId: params.trialId,
+         timestamp: now,
+         operatorId: params.operatorId || 'OPERATOR',
+         action: 'REPLACE_PHOTO',
+         entityType: 'PANEL',
+         entityId: params.panelId,
+         details: {
+           oldMediaId: existingActivePhoto.id,
+           stageId: params.stageId,
+           reason: 'Remplacement de photographie active par un nouveau cliché'
+         }
+       });
+     }
+   }
 
     const media: MediaReference = {
       id: generateUUID(),
@@ -1702,7 +1696,7 @@ export class TrialStoreService {
     });
 
     this.saveTrial(trial);
-    return { trial, media, replacedMediaId };
+    return trial;
   }
 
   /**
