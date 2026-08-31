@@ -14,6 +14,7 @@ import { Tab06MeasurementsBench } from './trial-tabs/Tab06MeasurementsBench';
 import { Tab07QualityControl } from './trial-tabs/Tab07QualityControl';
 import { Tab08ResultsViews } from './trial-tabs/Tab08ResultsViews';
 import { Tab09AuditTrail } from './trial-tabs/Tab09AuditTrail';
+import { TabPhotographs } from './trial-tabs/TabPhotographs';
 import {
   ArrowLeft,
   FileText,
@@ -22,6 +23,7 @@ import {
   Calendar,
   Clock,
   PlayCircle,
+  Camera,
   ShieldCheck,
   BarChart3,
   History,
@@ -51,14 +53,15 @@ export function TrialDetailView({
 
   const tabs = [
     { id: '01', label: '01 Identification', icon: FileText },
-    { id: '02', label: '02 Lots & Panneaux', icon: Layers },
+    { id: '02', label: '02 Lots & Échantillons', icon: Layers },
     { id: '03', label: '03 Protocole', icon: Sliders },
     { id: '04', label: '04 Calendrier', icon: Calendar },
     { id: '05', label: '05 Étapes', icon: Clock },
     { id: '06', label: '06 Paillasse / Saisie', icon: PlayCircle },
+    { id: 'PHOTO', label: 'Photothèque', icon: Camera },
     { id: '07', label: '07 Contrôle Qualité', icon: ShieldCheck },
     { id: '08', label: '08 Résultats & Fiches', icon: BarChart3 },
-    { id: '09', label: '09 Journal d\'Audit', icon: History }
+    { id: '09', label: "09 Journal d'Audit", icon: History }
   ];
 
   const handleNavigateToBench = (fam: MeasurementFamilyId) => {
@@ -183,6 +186,9 @@ export function TrialDetailView({
             onFamilyChange={setSelectedFamilyId}
             onTrialUpdated={onTrialUpdated}
           />
+        )}
+        {activeTab === 'PHOTO' && (
+          <TabPhotographs trial={trial} onTrialUpdated={onTrialUpdated} />
         )}
         {activeTab === '07' && (
           <Tab07QualityControl trial={trial} ruleSet={ruleSet} />

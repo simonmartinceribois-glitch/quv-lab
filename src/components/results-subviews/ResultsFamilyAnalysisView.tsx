@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   CheckCircle2
 } from 'lucide-react';
+import { getActiveExposedPanels } from '../../scientific/panelUtils';
 
 interface Props {
   trial: Trial;
@@ -40,7 +41,7 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
   const [selectedBatchFilter, setSelectedBatchFilter] = useState<string>('ALL');
 
   const evaluatedStages = trial.stages.filter(
-    (s) => s.status === 'VALIDATED' || s.status === 'IN_PROGRESS'
+    (s) => s.status !== 'INACTIVE' && (s.status === 'VALIDATED' || s.status === 'IN_PROGRESS')
   );
 
   // Préparation des données pour les graphiques Recharts (1 point par étape d'exposition)
@@ -51,7 +52,8 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
     };
 
     trial.batches.forEach((batch, bIdx) => {
-      const activePanels = batch.panels.filter((p) => p.status === 'ACTIVE');
+      // EXCLUSION STRICTE DU TÉMOIN T DES MOYENNES DU LOT
+      const activePanels = getActiveExposedPanels(batch.panels);
 
       if (activeFamily === 'COLOR') {
         const deltaEList: number[] = [];

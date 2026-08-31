@@ -187,6 +187,7 @@ export function calculateGloss(
     });
 
     const refMean = calculateMean(refValues);
+    const refStdDev = calculateStdDevByMethod(refValues, ruleSet.statisticalRules.stdDevMethod);
 
     if (meanGloss !== null && refMean !== null) {
       deltaGloss = meanGloss - refMean;
@@ -219,15 +220,52 @@ export function calculateGloss(
     }
   }
 
+  // 7. Détection du Mode et Alerte Spécifique INFIPERF (Rétention < 50%)
+  let detectedMode: 'NORMATIVE_4' | 'SIMPLIFIED_2' | 'NORMATIVE_6' = 'NORMATIVE_4';
+  if (raw.mode) {
+    detectedMode = raw.mode;
+  } else if (totalExpectedReadings === 2) {
+    detectedMode = 'SIMPLIFIED_2';
+  } else if (totalExpectedReadings === 6) {
+    detectedMode = 'NORMATIVE_6';
+  } else {
+    detectedMode = 'NORMATIVE_4';
+  }
+
+  let infiperfAlert: { active: boolean; message: string; source: 'INFIPERF / FCBA'; severity: 'WARNING' } | undefined = undefined;
+  if (retentionRatePercent !== null && retentionRatePercent < 50) {
+    infiperfAlert = {
+      active: true,
+      message: 'Alerte — rétention de brillant < 50 % (Critère d\'étude INFIPERF / FCBA)',
+      source: 'INFIPERF / FCBA',
+      severity: 'WARNING'
+    };
+    alerts.push({
+      id: `alert-gloss-infiperf-50`,
+      severity: 'WARNING',
+      code: 'STATISTICAL_WARNING',
+      message: `Alerte : Taux de rétention de brillant de ${roundMetric(retentionRatePercent, 1)} % (< seuil indicatif d'alerte de 50 % selon référence INFIPERF / FCBA). Critère complémentaire, distinct de la conformité NF EN 927-6.`,
+      familyId: 'GLOSS',
+      panelId: options?.panelId,
+      stageId: options?.stageId
+    });
+  }
+
   const computed: GlossComputedData = {
     totalReadings: totalExpectedReadings,
     validCount: allValidValues.length,
+    glossMode: detectedMode,
+    initialMeanGloss: options?.referenceRaw ? roundMetric(calculateMean((options.referenceRaw.series || []).flatMap(s => (s.readings || []).map(r => r.value).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)))), 2) : null,
+    initialStdDevGloss: options?.referenceRaw ? roundMetric(calculateStdDevByMethod((options.referenceRaw.series || []).flatMap(s => (s.readings || []).map(r => r.value).filter((v): v is number => typeof v === 'number' && Number.isFinite(v))), ruleSet.statisticalRules.stdDevMethod), 2) : null,
     meanGloss: roundMetric(meanGloss, 2),
     stdDevGloss: roundMetric(stdDevGloss, 2),
     seriesStats,
     referenceStageId: options?.referenceStageId ?? null,
     deltaGloss: roundMetric(deltaGloss, 2),
+    deltaGlossStdDev: null,
     retentionRatePercent: roundMetric(retentionRatePercent, 1),
+    infiperfAlert,
+    criterionCategory: 'NORMATIVE_REQUIREMENT',
     qualityAssessment,
     protocolStatus: protocolEval.status,
     computation: {

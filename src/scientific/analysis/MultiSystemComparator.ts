@@ -8,6 +8,7 @@ import { Trial, ExposureStage, BatchDefinition } from '../../types/trial';
 import { ScientificRuleSet, MeasurementFamilyId } from '../../types/scientific';
 import { SystemComparisonItem, DescriptiveRanking, ComparisonResult } from '../../types/analysis';
 import { calculateStdDevByMethod, calculateCoefficientOfVariation } from '../statistics';
+import { getActiveExposedPanels } from '../panelUtils';
 
 export function compareSystemsAtStage(
   trial: Trial,
@@ -25,7 +26,8 @@ export function compareSystemsAtStage(
   const limitations: string[] = [];
 
   for (const batch of targetBatches) {
-    const activePanels = batch.panels.filter((p) => p.status === 'ACTIVE');
+    // Exclusion absolue du Témoin T
+    const activePanels = getActiveExposedPanels(batch.panels);
     const item: SystemComparisonItem = {
       batchId: batch.id,
       batchReference: batch.reference,

@@ -62,6 +62,15 @@ export function ResultsPanelAnalysisView({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-base text-slate-900">Éprouvette {activePanel.label}</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                activePanel.role === 'WITNESS' || activePanel.roleCode === 'T' || activePanel.label === 'T'
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                  : 'bg-blue-100 text-blue-900'
+              }`}>
+                {activePanel.role === 'WITNESS' || activePanel.roleCode === 'T' || activePanel.label === 'T'
+                  ? 'T (Témoin non exposé)'
+                  : `${activePanel.roleCode || 'E'} (Exposée)`}
+              </span>
               <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                 Lot {activeBatch.reference}
               </span>
@@ -103,7 +112,7 @@ export function ResultsPanelAnalysisView({
           >
             {activeBatch.panels.map((p) => (
               <option key={p.id} value={p.id}>
-                Panneau {p.label} ({p.status})
+                {p.label} [{p.roleCode || (p.role === 'WITNESS' ? 'T' : 'E')}] {p.role === 'WITNESS' ? '• Témoin' : '• Exposé'} ({p.status})
               </option>
             ))}
           </select>

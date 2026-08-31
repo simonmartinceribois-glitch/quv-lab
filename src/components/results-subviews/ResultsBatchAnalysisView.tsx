@@ -1,6 +1,10 @@
 /**
  * QUV-Lab — Analyse par Lot & Fiche de Caractérisation (PROMPT 7 - Sections 10 & 11)
  * Consomme les données calculées et agrégées par le moteur scientifique.
+ *
+ * GATE 2.2 — Exclusion absolue du Témoin T dans toutes les agrégations du lot
+ * E1 + E2 + E3 = Éprouvettes exposées aux cycles QUV
+ * T = Témoin conservé à l'obscurité (exclu des moyennes, affiché pour comparaison)
  */
 
 import React, { useState } from 'react';
@@ -16,8 +20,10 @@ import {
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Eye
 } from 'lucide-react';
+import { getActiveExposedPanels, getWitnessPanel, getActiveStages } from '../../scientific/panelUtils';
 
 interface Props {
   trial: Trial;
@@ -36,8 +42,11 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
     );
   }
 
-  const activePanels = activeBatch.panels.filter((p) => p.status === 'ACTIVE');
+  // EXCLUSION ABSOLUE DU TÉMOIN T DES AGRÉGATIONS DU LOT
+  const exposedActivePanels = getActiveExposedPanels(activeBatch.panels);
+  const witnessPanel = getWitnessPanel(activeBatch.panels);
   const excludedPanels = activeBatch.panels.filter((p) => p.status === 'EXCLUDED');
+  const activeStages = getActiveStages(trial.stages);
 
   return (
     <div className="space-y-6">
@@ -49,7 +58,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
             Fiche Complète & Résultats par Lot Expérimental
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Caractérisation du système, préparation et agrégations inter-panneaux
+            Caractérisation du système, préparation et agrégations des éprouvettes exposées ({exposedActivePanels.length} exposées E1..E3)
           </p>
         </div>
 
@@ -69,7 +78,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
         </div>
       </div>
 
-      {/* 2. FICHE D'IDENTIFICATION DU LOT (Section 10) */}
+      {/* 2. FICHE D'IDENTIFICATION DU LOT */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
@@ -87,8 +96,16 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
 
           <div className="flex items-center gap-2">
             <span className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-semibold">
-              {activeBatch.panels.length} éprouvettes ({activePanels.length} actives • {excludedPanels.length} exclues)
+              {activeBatch.panels.length} éprouvettes ({exposedActivePanels.length} exposées E1..E3 • {witnessPanel ? '1 Témoin T' : '0 Témoin'} • {excludedPanels.length} exclues)
             </span>
+          </div>
+        </div>
+
+        {/* Note informative de ségrégation du Témoin T */}
+        <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <strong>Règle d'exclusion absolue du Témoin T :</strong> Le témoin conservé à l'obscurité (T) est strictement exclu de la moyenne de performance du lot, de l'écart-type $s_{inter}$, de la cinétique et du résultat global des exposés. Il est affiché dans sa colonne dédiée pour comparaison directe.
           </div>
         </div>
 
@@ -118,16 +135,16 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
         )}
       </div>
 
-      {/* 3. SYNTHÈSE AGRÉGÉE DU LOT PAR ÉTAPE (Section 11) */}
+      {/* 3. SYNTHÈSE AGRÉGÉE DU LOT PAR ÉTAPE */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-              Résultats Moyens & Agrégations Inter-Panneaux du Lot
+              Résultats Moyens & Agrégations des Éprouvettes Exposées (E1, E2, E3)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Distinction stricte entre dispersion intra-panneau et dispersion inter-panneaux (écart-type s inter)
+              Moyennes et dispersions inter-panneaux ($s_{inter}$) calculées exclusivement sur les éprouvettes exposées aux cycles QUV
             </p>
           </div>
         </div>
@@ -137,24 +154,24 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
             <thead>
               <tr className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
                 <th className="p-2.5">Étape d'Exposition</th>
-                <th className="p-2.5 text-center">Éprouvettes Actives</th>
-                <th className="p-2.5 bg-indigo-50/60 text-indigo-950">Moyenne ΔE* Lot</th>
+                <th className="p-2.5 text-center">Exposés E1..E3</th>
+                <th className="p-2.5 bg-indigo-50/60 text-indigo-950">Moyenne ΔE* Exposés</th>
                 <th className="p-2.5 bg-indigo-50/60 text-indigo-950">s inter (ΔE*)</th>
                 <th className="p-2.5 bg-blue-50/60 text-blue-950">Brillance Moyenne (60°)</th>
                 <th className="p-2.5 bg-blue-50/60 text-blue-950">s inter (Gloss)</th>
                 <th className="p-2.5 bg-emerald-50/60 text-emerald-950 font-black">Rétention Moyenne %</th>
                 <th className="p-2.5 bg-amber-50/60 text-amber-950">Dureté Persoz Moy. (s)</th>
-                <th className="p-2.5 text-center">Statut Qualité</th>
+                <th className="p-2.5 bg-slate-100 text-slate-800 border-l border-slate-300 font-black">Témoin T (Obscurité)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {trial.stages.map((stage) => {
-                // Collecter les computed pour Couleur
+              {activeStages.map((stage) => {
+                // Collecter les computed pour Couleur DES EXPOSÉS UNIQUEMENT
                 const colorComputedList: any[] = [];
                 const glossComputedList: any[] = [];
                 const persozComputedList: any[] = [];
 
-                activePanels.forEach((p) => {
+                exposedActivePanels.forEach((p) => {
                   const cAcq = trial.acquisitions[`${stage.id}__${p.id}__COLOR`];
                   if (cAcq?.computed) colorComputedList.push(cAcq.computed);
 
@@ -164,6 +181,20 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
                   const pAcq = trial.acquisitions[`${stage.id}__${p.id}__PERSOZ`];
                   if (pAcq?.computed) persozComputedList.push(pAcq.computed);
                 });
+
+                // Témoin T (individuel, non-agrégé)
+                let witnessInfo = '—';
+                if (witnessPanel) {
+                  const wColorAcq = trial.acquisitions[`${stage.id}__${witnessPanel.id}__COLOR`];
+                  const wGlossAcq = trial.acquisitions[`${stage.id}__${witnessPanel.id}__GLOSS`];
+                  const wDE = (wColorAcq?.computed as any)?.deltaE;
+                  const wG = (wGlossAcq?.computed as any)?.meanGloss;
+                  if (wDE !== undefined && wDE !== null) {
+                    witnessInfo = `ΔE*=${wDE.toFixed(2)}${wG !== undefined ? ` / ${wG.toFixed(1)}GU` : ''}`;
+                  } else if (wG !== undefined && wG !== null) {
+                    witnessInfo = `${wG.toFixed(1)} GU`;
+                  }
+                }
 
                 if (colorComputedList.length === 0 && glossComputedList.length === 0) {
                   return (
@@ -178,7 +209,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
                   );
                 }
 
-                // Utilisation des fonctions d'agrégation du moteur scientifique
+                // Utilisation des fonctions d'agrégation du moteur scientifique sur les exposés E1..E3
                 const colorAgg = aggregateBatchColor(activeBatch.id, stage.id, colorComputedList);
                 const glossAgg = aggregateBatchGloss(activeBatch.id, stage.id, glossComputedList);
 
@@ -199,7 +230,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
                       <span>{stage.cycleIndex === 0 ? 'T0 Initiale' : stage.cycleIndex === 12 ? '2016h Finale' : `Cycle ${stage.cycleIndex}`}</span>
                     </td>
                     <td className="p-2.5 text-center font-bold text-slate-700">
-                      {colorComputedList.length} / {activePanels.length}
+                      {colorComputedList.length} / {exposedActivePanels.length}
                     </td>
                     <td className="p-2.5 font-mono text-indigo-950 font-bold bg-indigo-50/30">
                       {stage.cycleIndex === 0 ? 'RÉF (0.00)' : colorAgg.meanDeltaE !== null ? colorAgg.meanDeltaE?.toFixed(2) : '—'}
@@ -219,10 +250,9 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
                     <td className="p-2.5 font-mono text-amber-950 bg-amber-50/30">
                       {meanPersozVal !== '—' ? `${meanPersozVal} s` : '—'}
                     </td>
-                    <td className="p-2.5 text-center">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        GOOD
-                      </span>
+                    <td className="p-2.5 font-mono text-slate-700 bg-slate-50 border-l border-slate-200">
+                      <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-[10px] mr-1">T</span>
+                      {witnessInfo}
                     </td>
                   </tr>
                 );

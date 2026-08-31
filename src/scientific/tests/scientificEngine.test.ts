@@ -1020,7 +1020,18 @@ export function runAllScientificTests(): { results: TestResult[]; summary: { tot
         intermediateCycles: [],
         finalCycle: { cycleIndex: 12, mandatory: true }
       },
-      batches: [{ id: 'b1', trialId: 'trial-legacy-migration', reference: 'LOT 01', orderIndex: 1, panels: [{ id: 'p1', batchId: 'b1', index: 1, label: 'P01', status: 'ACTIVE' }] }],
+      batches: [{
+        id: 'b1',
+        trialId: 'trial-legacy-migration',
+        reference: 'LOT 01',
+        orderIndex: 1,
+        coatingSystem: 'Lasure',
+        woodSpecies: 'Pin sylvestre',
+        productReference: 'P-01',
+        grainOrientation: 'Sur quartier (NF EN 927-6)',
+        exposureFace: 'Face avant (fil longitudinal)',
+        panels: [{ id: 'p1', batchId: 'b1', index: 1, label: 'P01', role: 'EXPOSED_1', roleCode: 'E1', status: 'ACTIVE' }]
+      }],
       stages: [
         { id: 's0', trialId: 'trial-legacy-migration', cycleIndex: 0, stageType: 'INITIAL_PRE_EXPOSURE', name: 'T0', scheduledExposureHours: 0, status: 'VALIDATED' },
         { id: 's1', trialId: 'trial-legacy-migration', cycleIndex: 1, stageType: 'INTERMEDIATE_POST_EXPOSURE' as any, name: '168 h — MESURES APRÈS EXPOSITION', scheduledExposureHours: 168, status: 'IN_PROGRESS' },
@@ -1083,7 +1094,18 @@ export function runAllScientificTests(): { results: TestResult[]; summary: { tot
         intermediateCycles: [],
         finalCycle: { cycleIndex: 12, mandatory: true }
       },
-      batches: [{ id: 'b1', trialId: 'trial-legacy-storage', reference: 'LOT 01', orderIndex: 1, panels: [{ id: 'p1', batchId: 'b1', index: 1, label: 'P01', status: 'ACTIVE' }] }],
+      batches: [{
+        id: 'b1',
+        trialId: 'trial-legacy-storage',
+        reference: 'LOT 01',
+        orderIndex: 1,
+        coatingSystem: 'Lasure',
+        woodSpecies: 'Pin sylvestre',
+        productReference: 'P-01',
+        grainOrientation: 'Sur quartier (NF EN 927-6)',
+        exposureFace: 'Face avant (fil longitudinal)',
+        panels: [{ id: 'p1', batchId: 'b1', index: 1, label: 'P01', role: 'EXPOSED_1', roleCode: 'E1', status: 'ACTIVE' }]
+      }],
       stages: [
         { id: 's0', trialId: 'trial-legacy-storage', cycleIndex: 0, stageType: 'INITIAL_PRE_EXPOSURE', name: 'T0 — MESURES INITIALES AVANT EXPOSITION', scheduledExposureHours: 0, status: 'VALIDATED' },
         { id: 's1', trialId: 'trial-legacy-storage', cycleIndex: 1, stageType: 'INTERMEDIATE_POST_EXPOSURE' as any, name: '168 h — MESURES APRÈS EXPOSITION', scheduledExposureHours: 168, status: 'IN_PROGRESS' },

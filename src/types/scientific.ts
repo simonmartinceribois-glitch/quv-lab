@@ -60,7 +60,7 @@ export type TrialStatus =
   | 'ARCHIVED';
 
 export type ConfigurationStatus = 'EDITABLE' | 'LOCKED';
-export type StageStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'READY_FOR_VALIDATION' | 'VALIDATED';
+export type StageStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'READY_FOR_VALIDATION' | 'VALIDATED' | 'INACTIVE';
 export type PanelStatus = 'ACTIVE' | 'EXCLUDED';
 export type AcquisitionStatus = 'EMPTY' | 'PARTIAL' | 'COMPLETE' | 'WARNING' | 'ERROR';
 export type AlertSeverity = 'INFO' | 'WARNING' | 'BLOCKING';

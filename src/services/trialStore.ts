@@ -15,7 +15,11 @@ import {
   PanelAcquisitionRecord,
   AuditEvent,
   MediaReference,
-  TrialProtocolConfig
+  TrialProtocolConfig,
+  WoodGrainOrientation,
+  ExposureFace,
+  SpecimenRole,
+  SpecimenRoleCode
 } from '../types/trial';
 import {
   UUID,
@@ -35,7 +39,7 @@ import { recalculateAcquisition } from '../scientific/recalculator';
 import { createConfigChangeEvent } from '../scientific/auditEngine';
 import { buildScientificReport } from './reportGenerator';
 
-const STORAGE_KEY = 'quv_lab_trials_v1_2';
+const STORAGE_KEY = 'quv_lab_trials_v2_2';
 
 /**
  * Générateur d'UUID simple
@@ -108,6 +112,8 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
 
   const metadata: TrialMetadata = {
     reference: 'QUV-2026-042',
+    orderNumber: 'CO-VAN2026-001',
+    reportNumber: 'RA-VAN2026-001',
     title: 'Système Lasurage Chêne Haute Durabilité',
     projectOrClient: 'Projet X — Ceribois & Partenaires',
     coatingSystemDescription: 'Système 3 couches lasure acrylique microporeuse en phase aqueuse',
@@ -149,10 +155,10 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
       batchNotes: 'Lot témoin sans agent anti-UV renforcé',
       panels: [
-        { id: `panel-${trialId}-1-1`, batchId: `batch-${trialId}-1`, index: 1, label: 'P01', status: 'ACTIVE' },
-        { id: `panel-${trialId}-1-2`, batchId: `batch-${trialId}-1`, index: 2, label: 'P02', status: 'ACTIVE' },
-        { id: `panel-${trialId}-1-3`, batchId: `batch-${trialId}-1`, index: 3, label: 'P03', status: 'ACTIVE' },
-        { id: `panel-${trialId}-1-4`, batchId: `batch-${trialId}-1`, index: 4, label: 'P04', status: 'ACTIVE' }
+        { id: `panel-${trialId}-1-1`, batchId: `batch-${trialId}-1`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
+        { id: `panel-${trialId}-1-2`, batchId: `batch-${trialId}-1`, index: 2, label: '1', role: 'EXPOSED_1', roleCode: 'E1', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-1-3`, batchId: `batch-${trialId}-1`, index: 3, label: '2', role: 'EXPOSED_2', roleCode: 'E2', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-1-4`, batchId: `batch-${trialId}-1`, index: 4, label: '3', role: 'EXPOSED_3', roleCode: 'E3', grainOrientation: 'Faux quartier', exposureFace: 'Face externe', status: 'ACTIVE' }
       ]
     },
     {
@@ -172,10 +178,10 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
       batchNotes: 'Formulation avec stabilisants lumière HALS',
       panels: [
-        { id: `panel-${trialId}-2-1`, batchId: `batch-${trialId}-2`, index: 1, label: 'P01', status: 'ACTIVE' },
-        { id: `panel-${trialId}-2-2`, batchId: `batch-${trialId}-2`, index: 2, label: 'P02', status: 'ACTIVE' },
-        { id: `panel-${trialId}-2-3`, batchId: `batch-${trialId}-2`, index: 3, label: 'P03', status: 'ACTIVE' },
-        { id: `panel-${trialId}-2-4`, batchId: `batch-${trialId}-2`, index: 4, label: 'P04', status: 'ACTIVE' }
+        { id: `panel-${trialId}-2-1`, batchId: `batch-${trialId}-2`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
+        { id: `panel-${trialId}-2-2`, batchId: `batch-${trialId}-2`, index: 2, label: '1', role: 'EXPOSED_1', roleCode: 'E1', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-2-3`, batchId: `batch-${trialId}-2`, index: 3, label: '2', role: 'EXPOSED_2', roleCode: 'E2', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-2-4`, batchId: `batch-${trialId}-2`, index: 4, label: '3', role: 'EXPOSED_3', roleCode: 'E3', grainOrientation: 'Faux quartier', exposureFace: 'Face externe', status: 'ACTIVE' }
       ]
     },
     {
@@ -195,10 +201,10 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
       batchNotes: 'Formulation nano-charges minérales absorbantes',
       panels: [
-        { id: `panel-${trialId}-3-1`, batchId: `batch-${trialId}-3`, index: 1, label: 'P01', status: 'ACTIVE' },
-        { id: `panel-${trialId}-3-2`, batchId: `batch-${trialId}-3`, index: 2, label: 'P02', status: 'ACTIVE' },
-        { id: `panel-${trialId}-3-3`, batchId: `batch-${trialId}-3`, index: 3, label: 'P03', status: 'ACTIVE' },
-        { id: `panel-${trialId}-3-4`, batchId: `batch-${trialId}-3`, index: 4, label: 'P04', status: 'ACTIVE' }
+        { id: `panel-${trialId}-3-1`, batchId: `batch-${trialId}-3`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
+        { id: `panel-${trialId}-3-2`, batchId: `batch-${trialId}-3`, index: 2, label: '1', role: 'EXPOSED_1', roleCode: 'E1', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-3-3`, batchId: `batch-${trialId}-3`, index: 3, label: '2', role: 'EXPOSED_2', roleCode: 'E2', grainOrientation: 'Quartier', exposureFace: 'Face externe', status: 'ACTIVE' },
+        { id: `panel-${trialId}-3-4`, batchId: `batch-${trialId}-3`, index: 4, label: '3', role: 'EXPOSED_3', roleCode: 'E3', grainOrientation: 'Faux quartier', exposureFace: 'Face externe', status: 'ACTIVE' }
       ]
     }
   ];
@@ -562,13 +568,18 @@ export function createValidationTrial(ruleSet: ScientificRuleSet): Trial {
       'Période prévue : du 2026-03-01 au 2026-05-24.'
   };
 
-  const commonCharacteristics = {
+  const commonCharacteristics: CommonCharacteristics = {
+    dimensions: {
+      lengthMm: 150,
+      widthMm: 75,
+      thicknessMm: 15,
+      unit: 'mm'
+    },
     materialType: 'Pin sylvestre (Pinus sylvestris L.)',
-    woodSpecies: 'Pin sylvestre',
-    substratePreparation: 'Rabotage fin selon NF EN 927-6, dépoussiérage et conditionnement 20°C/65% HR',
-    testFaces: 'Face radiale exposée',
-    exposureCycle: 'Cycle A (NF EN 927-6 - UV-A 340 nm + Condensation + Pulvérisation)',
-    chamberModel: 'QUV/spray (Q-Lab Corp)'
+    woodGrainOrientation: 'Sur quartier (NF EN 927-6)',
+    preparationNotes: 'Rabotage fin selon NF EN 927-6, dépoussiérage et conditionnement 20°C/65% HR',
+    conditioningNotes: 'Stabilisation 7 jours selon NF EN 927-6 §5',
+    generalProtocolNotes: 'Cycle A (NF EN 927-6 - UV-A 340 nm + Condensation + Pulvérisation) sur enceinte QUV/spray'
   };
 
   const protocolConfig: TrialProtocolConfig = {
@@ -918,6 +929,48 @@ export class TrialStoreService {
   public migrateTrialTerminology(trial: Trial): Trial {
     if (!trial || !Array.isArray(trial.stages)) return trial;
 
+    // Ensure orderNumber and reportNumber are present
+    if (!trial.metadata.orderNumber) {
+      trial.metadata.orderNumber = 'CO-VAN2026-001';
+    }
+    if (!trial.metadata.reportNumber) {
+      trial.metadata.reportNumber = 'RA-VAN2026-001';
+    }
+
+    // Ensure project-level dimensions
+    if (!trial.commonCharacteristics) {
+      trial.commonCharacteristics = {
+        dimensions: { lengthMm: 150, widthMm: 75, thicknessMm: 15, unit: 'mm' },
+        substrateNature: 'Bois massif',
+        materialType: 'Pin sylvestre (NF EN 927-6)'
+      };
+    } else if (!trial.commonCharacteristics.dimensions) {
+      trial.commonCharacteristics.dimensions = { lengthMm: 150, widthMm: 75, thicknessMm: 15, unit: 'mm' };
+    }
+
+    // Normalize specimen roles & orientations
+    if (Array.isArray(trial.batches)) {
+      trial.batches.forEach((b) => {
+        if (Array.isArray(b.panels)) {
+          b.panels.forEach((p, pIdx) => {
+            if (pIdx === 0 || p.label === 'P01' || p.label === 'T') {
+              p.label = 'T';
+              p.role = 'WITNESS';
+              p.roleCode = 'T';
+              if (!p.grainOrientation) p.grainOrientation = 'Quartier';
+            } else {
+              const expNum = pIdx;
+              p.label = `${expNum}`;
+              p.role = expNum === 1 ? 'EXPOSED_1' : expNum === 2 ? 'EXPOSED_2' : 'EXPOSED_3';
+              p.roleCode = expNum === 1 ? 'E1' : expNum === 2 ? 'E2' : 'E3';
+              if (!p.grainOrientation) p.grainOrientation = expNum === 3 ? 'Faux quartier' : 'Quartier';
+              if (!p.exposureFace) p.exposureFace = 'Face externe';
+            }
+          });
+        }
+      });
+    }
+
     trial.stages.forEach((stage, idx) => {
       const isFinal = stage.cycleIndex === 12 || (stage.cycleIndex > 0 && idx === trial.stages.length - 1);
       const isInitial = stage.cycleIndex === 0;
@@ -987,7 +1040,15 @@ export class TrialStoreService {
   }
 
   public getTrial(id: UUID): Trial | undefined {
-    return this.trials.get(id);
+    const trial = this.trials.get(id);
+    if (trial) {
+      if (!trial.auditTrail) trial.auditTrail = [];
+      if (!trial.auditEvents) trial.auditEvents = [];
+      if (!trial.mediaReferences) trial.mediaReferences = [];
+      if (!trial.acquisitions) trial.acquisitions = {};
+      if (!trial.reports) trial.reports = [];
+    }
+    return trial;
   }
 
   public getAllTrials(): Trial[] {
@@ -996,6 +1057,11 @@ export class TrialStoreService {
 
   public saveTrial(trial: Trial): void {
     trial.updatedAt = new Date().toISOString();
+    if (!trial.auditTrail) trial.auditTrail = [];
+    if (!trial.auditEvents) trial.auditEvents = [];
+    if (!trial.mediaReferences) trial.mediaReferences = [];
+    if (!trial.acquisitions) trial.acquisitions = {};
+    if (!trial.reports) trial.reports = [];
     this.trials.set(trial.id, trial);
     this.saveToStorage();
   }
@@ -1037,16 +1103,51 @@ export class TrialStoreService {
 
     const createdBatches: BatchDefinition[] = params.batches.map((b, bIdx) => {
       const batchId = generateUUID();
-      const panels: PanelDefinition[] = [];
-      for (let p = 1; p <= (b.panelCount || 4); p++) {
-        panels.push({
+      const panels: PanelDefinition[] = [
+        {
           id: generateUUID(),
           batchId,
-          index: p,
-          label: `P0${p}`.slice(-3),
+          index: 1,
+          label: 'T',
+          role: 'WITNESS',
+          roleCode: 'T',
+          grainOrientation: 'Quartier',
           status: 'ACTIVE'
-        });
-      }
+        },
+        {
+          id: generateUUID(),
+          batchId,
+          index: 2,
+          label: '1',
+          role: 'EXPOSED_1',
+          roleCode: 'E1',
+          grainOrientation: 'Quartier',
+          exposureFace: 'Face externe',
+          status: 'ACTIVE'
+        },
+        {
+          id: generateUUID(),
+          batchId,
+          index: 3,
+          label: '2',
+          role: 'EXPOSED_2',
+          roleCode: 'E2',
+          grainOrientation: 'Quartier',
+          exposureFace: 'Face externe',
+          status: 'ACTIVE'
+        },
+        {
+          id: generateUUID(),
+          batchId,
+          index: 4,
+          label: '3',
+          role: 'EXPOSED_3',
+          roleCode: 'E3',
+          grainOrientation: 'Faux quartier',
+          exposureFace: 'Face externe',
+          status: 'ACTIVE'
+        }
+      ];
       return {
         id: batchId,
         trialId,
@@ -1400,7 +1501,95 @@ export class TrialStoreService {
   }
 
   /**
-   * Associe une photographie
+   * Active ou désactive une étape intermédiaire d'exposition (C1 à C11)
+   * T0, C12 et AFTER_EXPOSURE sont obligatoires et protégées contre toute désactivation.
+   * La désactivation est NON-DESTRUCTIVE : conserve les relevés, photos, métadonnées et audit trail.
+   */
+  public toggleStageStatus(
+    trialId: UUID,
+    stageId: UUID,
+    arg3?: boolean | string,
+    arg4?: string,
+    arg5?: string
+  ): Trial {
+    const trial = this.getTrial(trialId);
+    if (!trial) throw new Error(`Essai ${trialId} introuvable`);
+
+    const stage = trial.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error(`Étape ${stageId} introuvable`);
+
+    // Protection absolue des étapes obligatoires T0, C12 (2016 h) et étapes finales
+    if (
+      stage.cycleIndex === 0 ||
+      stage.cycleIndex === 12 ||
+      stage.stageType === 'INITIAL_PRE_EXPOSURE' ||
+      stage.stageType === 'FINAL_POST_EXPOSURE'
+    ) {
+      throw new Error(
+        "L'étape initiale T0, l'étape finale C12 (2016 h) et l'étape après exposition sont obligatoires selon NF EN 927-6 et ne peuvent pas être désactivées."
+      );
+    }
+
+    let active: boolean;
+    let operatorId: string;
+    let reason: string | undefined;
+
+    if (typeof arg3 === 'boolean') {
+      active = arg3;
+      operatorId = arg4 || 'OPERATOR';
+      reason = arg5;
+    } else {
+      active = stage.status === 'INACTIVE';
+      operatorId = (arg3 as string) || 'OPERATOR';
+      reason = arg4;
+    }
+
+    const now = new Date().toISOString();
+    if (!trial.auditTrail) trial.auditTrail = [];
+    if (!trial.auditEvents) trial.auditEvents = [];
+
+    if (!active) {
+      stage.status = 'INACTIVE';
+      trial.auditTrail.push({
+        id: generateUUID(),
+        trialId,
+        timestamp: now,
+        operatorId: operatorId || 'OPERATOR',
+        action: 'DEACTIVATE_STAGE',
+        entityType: 'STAGE',
+        entityId: stageId,
+        details: {
+          stageName: stage.name,
+          cycleIndex: stage.cycleIndex,
+          scheduledExposureHours: stage.scheduledExposureHours,
+          reason: reason || 'Désactivation intermédiaire du jalon'
+        }
+      });
+    } else {
+      stage.status = 'NOT_STARTED';
+      trial.auditTrail.push({
+        id: generateUUID(),
+        trialId,
+        timestamp: now,
+        operatorId: operatorId || 'OPERATOR',
+        action: 'REACTIVATE_STAGE',
+        entityType: 'STAGE',
+        entityId: stageId,
+        details: {
+          stageName: stage.name,
+          cycleIndex: stage.cycleIndex,
+          scheduledExposureHours: stage.scheduledExposureHours
+        }
+      });
+    }
+
+    this.saveTrial(trial);
+    return trial;
+  }
+
+  /**
+   * Associe une photographie en garantissant l'unicité stricte du cliché actif par (panelId + stageId).
+   * Si une photo existe déjà, replaceExisting doit valoir true pour archiver l'ancien cliché dans l'historique.
    */
   public attachPhoto(params: {
     trialId: UUID;
@@ -1410,9 +1599,53 @@ export class TrialStoreService {
     caption: string;
     operatorId: string;
     storageKey?: string;
-  }): { trial: Trial; media: MediaReference } {
+    replaceExisting?: boolean;
+  }): { trial: Trial; media: MediaReference; replacedMediaId?: string } {
     const trial = this.getTrial(params.trialId);
     if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
+
+    const now = new Date().toISOString();
+    let replacedMediaId: string | undefined;
+
+    // Vérifier si une photo active existe déjà pour ce couple (panelId, stageId)
+    if (params.panelId && params.stageId) {
+      const existingActivePhoto = trial.mediaReferences.find(
+        (m) =>
+          m.type === 'PHOTO' &&
+          m.status !== 'ARCHIVED' &&
+          m.panelId === params.panelId &&
+          m.stageId === params.stageId
+      );
+
+      if (existingActivePhoto) {
+        if (!params.replaceExisting) {
+          throw new Error(
+            'Une photographie existe déjà pour cet échantillon à cette étape.'
+          );
+        }
+
+        // Archivage non destructif de l'ancienne photo dans l'historique
+        existingActivePhoto.status = 'ARCHIVED';
+        existingActivePhoto.replacedAt = now;
+        existingActivePhoto.replacedBy = params.operatorId || 'OPERATOR';
+        replacedMediaId = existingActivePhoto.id;
+
+        trial.auditTrail.push({
+          id: generateUUID(),
+          trialId: params.trialId,
+          timestamp: now,
+          operatorId: params.operatorId || 'OPERATOR',
+          action: 'REPLACE_PHOTO',
+          entityType: 'PANEL',
+          entityId: params.panelId,
+          details: {
+            oldMediaId: existingActivePhoto.id,
+            stageId: params.stageId,
+            reason: 'Remplacement de photographie active par un nouveau cliché'
+          }
+        });
+      }
+    }
 
     const media: MediaReference = {
       id: generateUUID(),
@@ -1420,14 +1653,23 @@ export class TrialStoreService {
       panelId: params.panelId,
       stageId: params.stageId,
       type: 'PHOTO',
+      status: 'ACTIVE',
       storageKey: params.storageKey || `photos/${params.filename}`,
       filename: params.filename,
       mimeType: 'image/jpeg',
       sizeBytes: 1024 * 250,
-      capturedAt: new Date().toISOString(),
+      capturedAt: now,
       capturedBy: params.operatorId || 'OPERATOR',
-      caption: params.caption
+      caption: params.caption,
+      replacementMediaId: replacedMediaId
     };
+
+    if (replacedMediaId) {
+      const oldPhoto = trial.mediaReferences.find((m) => m.id === replacedMediaId);
+      if (oldPhoto) {
+        oldPhoto.replacementMediaId = media.id;
+      }
+    }
 
     trial.mediaReferences.push(media);
 
@@ -1436,12 +1678,65 @@ export class TrialStoreService {
       const obsKey = `${params.stageId}__${params.panelId}__OBSERVATIONS`;
       const obsRec = trial.acquisitions[obsKey];
       if (obsRec) {
+        if (replacedMediaId) {
+          obsRec.mediaIds = obsRec.mediaIds.filter((id) => id !== replacedMediaId);
+        }
         obsRec.mediaIds = [...obsRec.mediaIds, media.id];
       }
     }
 
+    trial.auditTrail.push({
+      id: generateUUID(),
+      trialId: params.trialId,
+      timestamp: now,
+      operatorId: params.operatorId || 'OPERATOR',
+      action: 'ATTACH_PHOTO',
+      entityType: 'PANEL',
+      entityId: params.panelId || params.trialId,
+      details: {
+        mediaId: media.id,
+        stageId: params.stageId,
+        filename: params.filename,
+        replacedMediaId
+      }
+    });
+
     this.saveTrial(trial);
-    return { trial, media };
+    return { trial, media, replacedMediaId };
+  }
+
+  /**
+   * Supprime une référence de photographie
+   */
+  public deletePhoto(trialId: UUID, mediaId: UUID, operatorId: string): Trial {
+    const trial = this.getTrial(trialId);
+    if (!trial) throw new Error(`Essai ${trialId} introuvable`);
+
+    const mediaIdx = trial.mediaReferences.findIndex(m => m.id === mediaId);
+    if (mediaIdx === -1) return trial;
+
+    const removed = trial.mediaReferences.splice(mediaIdx, 1)[0];
+
+    // Nettoyer les références dans les acquisitions
+    Object.values(trial.acquisitions).forEach(acq => {
+      if (acq.mediaIds && acq.mediaIds.includes(mediaId)) {
+        acq.mediaIds = acq.mediaIds.filter(id => id !== mediaId);
+      }
+    });
+
+    trial.auditTrail.push({
+      id: generateUUID(),
+      trialId: trial.id,
+      timestamp: new Date().toISOString(),
+      operatorId: operatorId || 'OPERATOR',
+      action: 'DELETE_PHOTO',
+      entityType: 'PANEL',
+      entityId: removed.panelId || trial.id,
+      details: { mediaId, filename: removed.filename, caption: removed.caption }
+    });
+
+    this.saveTrial(trial);
+    return trial;
   }
 
   /**

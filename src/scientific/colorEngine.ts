@@ -156,6 +156,12 @@ export function calculateColor(
   let deltaA: number | null = null;
   let deltaB: number | null = null;
   let deltaE: number | null = null;
+  let deltaC: number | null = null;
+  let deltaH: number | null = null;
+
+  let refMeanL: number | null = null;
+  let refMeanA: number | null = null;
+  let refMeanB: number | null = null;
 
   if (options?.referenceRaw) {
     const refValidL = (options.referenceRaw.readings || [])
@@ -168,9 +174,9 @@ export function calculateColor(
       .map((r) => r.b)
       .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 
-    const refMeanL = calculateMean(refValidL);
-    const refMeanA = calculateMean(refValidA);
-    const refMeanB = calculateMean(refValidB);
+    refMeanL = calculateMean(refValidL);
+    refMeanA = calculateMean(refValidA);
+    refMeanB = calculateMean(refValidB);
 
     if (
       meanL !== null &&
@@ -186,6 +192,17 @@ export function calculateColor(
 
       // CIE 1976 ΔE*ab
       deltaE = Math.sqrt(Math.pow(deltaL, 2) + Math.pow(deltaA, 2) + Math.pow(deltaB, 2));
+
+      // ΔC* (différence de saturation) et ΔH* (différence de teinte)
+      const refChroma = Math.sqrt(Math.pow(refMeanA, 2) + Math.pow(refMeanB, 2));
+      if (chromaC !== null) {
+        deltaC = chromaC - refChroma;
+        const dE2 = Math.pow(deltaE, 2);
+        const dL2 = Math.pow(deltaL, 2);
+        const dC2 = Math.pow(deltaC, 2);
+        const diffH2 = dE2 - dL2 - dC2;
+        deltaH = diffH2 > 0 ? Math.sqrt(diffH2) : 0;
+      }
     } else {
       alerts.push({
         id: `alert-col-ref-inc`,
@@ -211,10 +228,16 @@ export function calculateColor(
     chromaC: roundMetric(chromaC, 3),
     hueH: roundMetric(hueH, 2),
     referenceStageId: options?.referenceStageId ?? null,
+    initialMeanL: roundMetric(refMeanL, 3),
+    initialMeanA: roundMetric(refMeanA, 3),
+    initialMeanB: roundMetric(refMeanB, 3),
     deltaL: roundMetric(deltaL, 3),
     deltaA: roundMetric(deltaA, 3),
     deltaB: roundMetric(deltaB, 3),
     deltaE: roundMetric(deltaE, 3),
+    deltaC: roundMetric(deltaC, 3),
+    deltaH: roundMetric(deltaH, 3),
+    criterionCategory: 'COMPLEMENTARY_CRITERION',
     qualityAssessment,
     protocolStatus: protocolEval.status,
     computation: {

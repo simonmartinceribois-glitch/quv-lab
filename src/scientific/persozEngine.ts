@@ -105,13 +105,14 @@ export function calculatePersoz(
   // 5. Comparaison différentielle avec T0 (si disponible)
   let deltaDampingTime: number | null = null;
   let relativeHardnessVariationPercent: number | null = null;
+  let refMean: number | null = null;
 
   if (options?.referenceRaw) {
     const refValidValues = (options.referenceRaw.readings || [])
       .map((r) => r.dampingTimeSeconds)
       .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0);
 
-    const refMean = calculateMean(refValidValues);
+    refMean = calculateMean(refValidValues);
 
     if (meanDampingTime !== null && refMean !== null) {
       deltaDampingTime = meanDampingTime - refMean;
@@ -124,12 +125,14 @@ export function calculatePersoz(
   const computed: PersozComputedData = {
     pointsCount: expectedCount,
     validCount: validValues.length,
+    initialMeanDampingTime: roundMetric(refMean, 1),
     meanDampingTime: roundMetric(meanDampingTime, 1),
     stdDevDampingTime: roundMetric(stdDevDampingTime, 2),
     coefficientOfVariationPercent: roundMetric(coefficientOfVariationPercent, 1),
     referenceStageId: options?.referenceStageId ?? null,
     deltaDampingTime: roundMetric(deltaDampingTime, 1),
     relativeHardnessVariationPercent: roundMetric(relativeHardnessVariationPercent, 1),
+    criterionCategory: 'COMPLEMENTARY_CRITERION',
     qualityAssessment,
     protocolStatus: protocolEval.status,
     computation: {

@@ -102,10 +102,13 @@ function createMockTrial(reference = 'MOCK-TRIAL-01'): Trial {
         orderIndex: 1,
         coatingSystem: 'Lasure Haute Durabilité',
         woodSpecies: 'Pin sylvestre',
+        productReference: 'PROD-LAS-01',
+        grainOrientation: 'Sur quartier (NF EN 927-6)',
+        exposureFace: 'Face avant (fil longitudinal)',
         manufacturerOrSupplier: 'FINITIONS PRO SA',
         panels: [
-          { id: 'p1', batchId: 'b1', index: 1, label: 'P01', status: 'ACTIVE' },
-          { id: 'p2', batchId: 'b1', index: 2, label: 'P02', status: 'ACTIVE' }
+          { id: 'p1', batchId: 'b1', index: 1, label: 'P01', role: 'EXPOSED_1', roleCode: 'E1', status: 'ACTIVE' },
+          { id: 'p2', batchId: 'b1', index: 2, label: 'P02', role: 'EXPOSED_2', roleCode: 'E2', status: 'ACTIVE' }
         ]
       }
     ],
@@ -445,7 +448,12 @@ export function runAllAcceptanceTests(): {
       trialId: trial.id,
       reference: 'LOT B',
       orderIndex: 2,
-      panels: [{ id: 'p3', batchId: 'b2', index: 1, label: 'P01', status: 'ACTIVE' }]
+      coatingSystem: 'Peinture Microporeuse',
+      woodSpecies: 'Pin sylvestre',
+      productReference: 'PROD-PEINT-02',
+      grainOrientation: 'Sur quartier (NF EN 927-6)',
+      exposureFace: 'Face avant (fil longitudinal)',
+      panels: [{ id: 'p3', batchId: 'b2', index: 1, label: 'P01', role: 'EXPOSED_1', roleCode: 'E1', status: 'ACTIVE' }]
     });
     // Seulement lot A mesuré
     seedAcq(trial, 'st-2016', 'p1', 'COLOR', {}, { deltaE: 2.5, deltaL: -1.0, deltaA: 0.2, deltaB: 1.2 });

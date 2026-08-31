@@ -7,6 +7,7 @@
 import { Trial, ExposureStage, BatchDefinition } from '../../types/trial';
 import { ScientificRuleSet } from '../../types/scientific';
 import { TrendFinding, FactualFinding, InterpretationFinding, TrendDirection } from '../../types/analysis';
+import { getActiveExposedPanels, getActiveStages } from '../panelUtils';
 
 export interface TemporalKineticsSeries {
   exposureHours: number;
@@ -34,10 +35,12 @@ export function extractTemporalKinetics(
   const batch = trial.batches.find((b) => b.id === batchId);
   if (!batch) return [];
 
-  const activePanels = batch.panels.filter((p) => p.status === 'ACTIVE');
+  // EXCLUSION STRICTE DU TÉMOIN T (conservé à l'obscurité)
+  const activeExposedPanels = getActiveExposedPanels(batch.panels);
+  const activeStages = getActiveStages(trial.stages);
   const series: TemporalKineticsSeries[] = [];
 
-  for (const stage of trial.stages) {
+  for (const stage of activeStages) {
     let deltaESum = 0;
     let deltaLSum = 0;
     let deltaASum = 0;
@@ -56,7 +59,7 @@ export function extractTemporalKinetics(
 
     let obsCount = 0;
 
-    for (const panel of activePanels) {
+    for (const panel of activeExposedPanels) {
       // 1. Couleur
       const colorAcq = trial.acquisitions[`${stage.id}__${panel.id}__COLOR`];
       if (colorAcq && colorAcq.computed) {
@@ -452,7 +455,7 @@ export function analyzeBatchTrends(
     let crackingMax = 0;
     let chalkingMax = 0;
 
-    for (const panel of batch.panels) {
+    for (const panel of getActiveExposedPanels(batch.panels)) {
       const obsAcq = trial.acquisitions[`${actualFinalStage.id}__${panel.id}__OBSERVATIONS`];
       if (obsAcq && obsAcq.raw) {
         recordedObsCount++;

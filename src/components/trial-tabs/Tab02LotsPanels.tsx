@@ -1,11 +1,13 @@
 /**
- * QUV-Lab — 02 Lots & Panneaux (PROMPT 6 v6.1 - Sections 8, 9 & 10)
- * Gère le référentiel permanent de l'essai : Lots, Caractéristiques détaillées,
- * Éprouvettes stables (XX1C-P01...), et Exclusion Motivée sans suppression physique.
+ * QUV-Lab — 02 Lots & Échantillons (GATE 2.1 + GATE 2.2)
+ * Gère le référentiel hiérarchique :
+ * PROJET (Dimensions communes)
+ *  └── LOTS (Essence, Produit, Système)
+ *       └── ÉCHANTILLONS (T, 1/E1, 2/E2, 3/E3 avec Orientation fil et Face d'exposition)
  */
 
 import React, { useState } from 'react';
-import { Trial, BatchDefinition, PanelDefinition } from '../../types/trial';
+import { Trial, BatchDefinition, PanelDefinition, WoodGrainOrientation, ExposureFace } from '../../types/trial';
 import { globalTrialStore, generateUUID } from '../../services/trialStore';
 import {
   Layers,
@@ -22,7 +24,9 @@ import {
   Lock,
   Tag,
   Sparkles,
-  Sliders
+  Sliders,
+  Compass,
+  Maximize2
 } from 'lucide-react';
 
 interface Props {
@@ -36,13 +40,13 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
     batch: BatchDefinition;
   } | null>(null);
   const [exclusionReason, setExclusionReason] = useState('');
-  const [operatorId, setOperatorId] = useState('Simon Martin (Technicien)');
+  const [operatorId, setOperatorId] = useState(trial.metadata.createdBy || 'Simon Martin (Technicien)');
   const [exclusionError, setExclusionError] = useState<string | null>(null);
 
   // Ajout de nouveau lot (si non verrouillé)
   const [showAddBatchModal, setShowAddBatchModal] = useState(false);
   const [newBatchRef, setNewBatchRef] = useState('');
-  const [newBatchWood, setNewBatchWood] = useState('Pin sylvestre standardisé');
+  const [newBatchWood, setNewBatchWood] = useState(trial.commonCharacteristics?.materialType || 'Pin sylvestre standardisé');
   const [newBatchProduct, setNewBatchProduct] = useState('');
   const [newBatchSupplier, setNewBatchSupplier] = useState('');
   const [newBatchCoating, setNewBatchCoating] = useState('');
@@ -53,9 +57,30 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
   const [newBatchDate, setNewBatchDate] = useState(new Date().toISOString().slice(0, 10));
   const [newBatchDrying, setNewBatchDrying] = useState('7 jours à 20°C/65% HR');
   const [newBatchNotes, setNewBatchNotes] = useState('');
-  const [newBatchPanelCount, setNewBatchPanelCount] = useState(4);
 
   const isLocked = trial.configurationStatus === 'LOCKED';
+
+  const handleUpdateSpecimenGrain = (batchId: string, panelId: string, orientation: WoodGrainOrientation) => {
+    const batch = trial.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    const panel = batch.panels.find((p) => p.id === panelId);
+    if (!panel) return;
+
+    panel.grainOrientation = orientation;
+    globalTrialStore.saveTrial(trial);
+    onTrialUpdated();
+  };
+
+  const handleUpdateSpecimenFace = (batchId: string, panelId: string, face: ExposureFace) => {
+    const batch = trial.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    const panel = batch.panels.find((p) => p.id === panelId);
+    if (!panel) return;
+
+    panel.exposureFace = face;
+    globalTrialStore.saveTrial(trial);
+    onTrialUpdated();
+  };
 
   const handleOpenExclusion = (batch: BatchDefinition, panel: PanelDefinition) => {
     setSelectedPanelForExclusion({ batch, panel });
@@ -66,7 +91,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
   const handleConfirmExclusion = () => {
     if (!selectedPanelForExclusion) return;
     if (!exclusionReason.trim()) {
-      setExclusionError('Le motif d\'exclusion du panneau est obligatoire.');
+      setExclusionError("Le motif d'exclusion de l'éprouvette est obligatoire.");
       return;
     }
 
@@ -80,7 +105,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
       setSelectedPanelForExclusion(null);
       onTrialUpdated();
     } catch (err: any) {
-      setExclusionError(err.message || 'Erreur lors de l\'exclusion');
+      setExclusionError(err.message || "Erreur lors de l'exclusion");
     }
   };
 
@@ -89,16 +114,51 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
     if (!newBatchRef.trim()) return;
 
     const batchId = generateUUID();
-    const panels: PanelDefinition[] = [];
-    for (let p = 1; p <= newBatchPanelCount; p++) {
-      panels.push({
+    const panels: PanelDefinition[] = [
+      {
         id: generateUUID(),
         batchId,
-        index: p,
-        label: `P0${p}`.slice(-3),
+        index: 1,
+        label: 'T',
+        role: 'WITNESS',
+        roleCode: 'T',
+        grainOrientation: 'Quartier',
         status: 'ACTIVE'
-      });
-    }
+      },
+      {
+        id: generateUUID(),
+        batchId,
+        index: 2,
+        label: '1',
+        role: 'EXPOSED_1',
+        roleCode: 'E1',
+        grainOrientation: 'Quartier',
+        exposureFace: 'Face externe',
+        status: 'ACTIVE'
+      },
+      {
+        id: generateUUID(),
+        batchId,
+        index: 3,
+        label: '2',
+        role: 'EXPOSED_2',
+        roleCode: 'E2',
+        grainOrientation: 'Quartier',
+        exposureFace: 'Face externe',
+        status: 'ACTIVE'
+      },
+      {
+        id: generateUUID(),
+        batchId,
+        index: 4,
+        label: '3',
+        role: 'EXPOSED_3',
+        roleCode: 'E3',
+        grainOrientation: 'Faux quartier',
+        exposureFace: 'Face externe',
+        status: 'ACTIVE'
+      }
+    ];
 
     const newBatch: BatchDefinition = {
       id: batchId,
@@ -128,7 +188,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
       action: 'CREATE_BATCH',
       entityType: 'BATCH',
       entityId: batchId,
-      details: { reference: newBatch.reference, panelCount: newBatchPanelCount }
+      details: { reference: newBatch.reference, panelCount: 4 }
     });
 
     globalTrialStore.saveTrial(trial);
@@ -144,14 +204,24 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
   );
   const totalPanels = trial.batches.reduce((acc, b) => acc + b.panels.length, 0);
 
+  const dimLength = trial.commonCharacteristics?.dimensions?.lengthMm || 150;
+  const dimWidth = trial.commonCharacteristics?.dimensions?.widthMm || 75;
+  const dimThick = trial.commonCharacteristics?.dimensions?.thicknessMm || 15;
+  const dimUnit = trial.commonCharacteristics?.dimensions?.unit || 'mm';
+
   return (
     <div className="space-y-6">
-      {/* Header Info */}
+      {/* Header Info & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-white shadow-xs">
         <div>
-          <h3 className="text-base font-bold text-slate-900">Référentiel Permanent : Lots & Panneaux</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900">Référentiel : Lots & Échantillons</h3>
+            <span className="px-2 py-0.5 text-xs font-mono font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
+              GATE 2.1 & 2.2
+            </span>
+          </div>
           <p className="text-xs text-slate-500">
-            {trial.batches.length} lots expérimentaux • {totalActivePanels} éprouvettes actives sur {totalPanels} totaux
+            {trial.batches.length} lots expérimentaux • {totalActivePanels} éprouvettes actives ({trial.batches.length} témoins T + {totalActivePanels - trial.batches.length} exposées E)
           </p>
         </div>
 
@@ -165,7 +235,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
             className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Ajouter un Lot
+            Ajouter un Lot (T + 3 E)
           </button>
         ) : (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">
@@ -175,14 +245,35 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
         )}
       </div>
 
-      {/* Explication & Règle Métier */}
-      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600">
-        <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold text-slate-800">Principe de pérennité des éprouvettes (PROMPT 6)</p>
-          <p>
-            Chaque panneau possède un identifiant pérenne et immuable (ex : <code>LOT XX1C-P01</code>). Les acquisitions pointent toujours vers ces éprouvettes. L'exclusion d'un panneau est motivée et conserve l'historique sans destruction physique.
-          </p>
+      {/* Rappel Dimensions PROJET & Règles de Hiérarchie */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center gap-3 text-xs">
+          <Maximize2 className="w-5 h-5 text-blue-600 shrink-0" />
+          <div>
+            <span className="font-bold text-blue-900 block">Dimensions Communes PROJET</span>
+            <span className="font-mono font-semibold text-blue-800">
+              {dimLength} × {dimWidth} × {dimThick} {dimUnit}
+            </span>
+            <span className="text-[10px] text-blue-600 block">Saisies 1 seule fois au niveau Projet</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-center gap-3 text-xs">
+          <Layers className="w-5 h-5 text-indigo-600 shrink-0" />
+          <div>
+            <span className="font-bold text-indigo-900 block">Niveau LOT</span>
+            <span className="text-indigo-800">Essence • Produit • Système de finition</span>
+            <span className="text-[10px] text-indigo-600 block">4 éprouvettes par lot (T, E1, E2, E3)</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center gap-3 text-xs">
+          <Compass className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div>
+            <span className="font-bold text-emerald-900 block">Niveau ÉCHANTILLON</span>
+            <span className="text-emerald-800">Orientation du fil • Face d'exposition</span>
+            <span className="text-[10px] text-emerald-600 block">Défini individuellement par éprouvette</span>
+          </div>
         </div>
       </div>
 
@@ -231,90 +322,159 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
                 </div>
               </div>
 
-              {/* Batch Detailed Metadata Attributes */}
+              {/* Paramètres du LOT (Essence, Produit, Système) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Essence</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Essence (Bois)</span>
                   <span className="font-semibold text-slate-800">{batch.woodSpecies || '—'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Fabricant / Fournisseur</span>
-                  <span className="font-semibold text-slate-800">{batch.manufacturerOrSupplier || '—'}</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Produit / Référence</span>
+                  <span className="font-semibold text-slate-800">{batch.productReference || '—'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Couches & Méthode</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Système & Couches</span>
                   <span className="font-semibold text-slate-800">
-                    {batch.coatCount ? `${batch.coatCount} couches` : ''} {batch.applicationMethod ? `(${batch.applicationMethod})` : ''}
+                    {batch.coatingSystem || '—'} {batch.coatCount ? `(${batch.coatCount} couches)` : ''}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Conditions / Séchage</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Fabricant & Méthode</span>
                   <span className="font-semibold text-slate-800">
-                    {batch.applicationConditions || batch.dryingOrConditioningTime || '—'}
+                    {batch.manufacturerOrSupplier || '—'} {batch.applicationMethod ? `• ${batch.applicationMethod}` : ''}
                   </span>
                 </div>
-                {batch.batchNotes && (
-                  <div className="col-span-2 sm:col-span-4 pt-1 border-t border-slate-200/60 text-slate-600">
-                    <span className="text-slate-400 font-bold mr-1">Remarques :</span>
-                    {batch.batchNotes}
-                  </div>
-                )}
               </div>
 
-              {/* Panels Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {batch.panels.map((panel) => {
-                  const isExcluded = panel.status === 'EXCLUDED';
-                  return (
-                    <div
-                      key={panel.id}
-                      className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
-                        isExcluded
-                          ? 'border-rose-200 bg-rose-50/60 opacity-80'
-                          : 'border-slate-200 bg-white hover:border-blue-300 shadow-2xs'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-mono font-bold text-xs text-slate-900">
-                            {batch.reference}-{panel.label}
-                          </span>
-                          {!isExcluded && (
-                            <button
-                              type="button"
-                              title="Exclure ce panneau de manière motivée"
-                              onClick={() => handleOpenExclusion(batch, panel)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+              {/* ÉCHANTILLONS DU LOT (T, 1, 2, 3) */}
+              <div>
+                <h5 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex items-center justify-between">
+                  <span>Éprouvettes du Lot ({batch.reference})</span>
+                  <span className="text-[11px] font-normal normal-case text-slate-400">
+                    1 Témoin (T) + 3 Exposées (1, 2, 3) selon NF EN 927-6
+                  </span>
+                </h5>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {batch.panels.map((panel, pIdx) => {
+                    const isWitness = pIdx === 0 || panel.label === 'T' || panel.roleCode === 'T';
+                    const isExcluded = panel.status === 'EXCLUDED';
+                    const specimenLabel = isWitness ? 'T' : (panel.label === 'P02' ? '1' : panel.label === 'P03' ? '2' : panel.label === 'P04' ? '3' : panel.label);
+                    const specimenCode = `${batch.reference}-${specimenLabel}`;
+                    const currentOrientation = panel.grainOrientation || (isWitness ? 'Quartier' : pIdx === 3 ? 'Faux quartier' : 'Quartier');
+                    const currentFace = panel.exposureFace || 'Face externe';
+
+                    return (
+                      <div
+                        key={panel.id}
+                        className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
+                          isExcluded
+                            ? 'border-rose-200 bg-rose-50/60 opacity-85'
+                            : isWitness
+                            ? 'border-purple-200 bg-purple-50/30 hover:border-purple-300 shadow-2xs'
+                            : 'border-slate-200 bg-white hover:border-blue-300 shadow-2xs'
+                        }`}
+                      >
+                        <div>
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-xs text-slate-900">
+                                {specimenCode}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                                  isWitness
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {isWitness ? 'Témoin (T)' : `Exposé (${specimenLabel})`}
+                              </span>
+                            </div>
+
+                            {!isExcluded && (
+                              <button
+                                type="button"
+                                title="Exclure cette éprouvette (Motif requis)"
+                                onClick={() => handleOpenExclusion(batch, panel)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Specimen Configuration Fields */}
+                          <div className="mt-2.5 space-y-2 text-xs">
+                            {/* Orientation du fil */}
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                                Orientation du fil
+                              </label>
+                              <select
+                                value={currentOrientation}
+                                onChange={(e) => handleUpdateSpecimenGrain(batch.id, panel.id, e.target.value as WoodGrainOrientation)}
+                                disabled={isExcluded}
+                                className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="Quartier">Quartier (NF EN 927-6)</option>
+                                <option value="Faux quartier">Faux quartier</option>
+                                <option value="Dosse">Dosse</option>
+                              </select>
+                            </div>
+
+                            {/* Face d'exposition */}
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                                Face d'exposition
+                              </label>
+                              {isWitness ? (
+                                <div className="px-2 py-1 bg-purple-100/60 border border-purple-200 rounded-md text-[11px] text-purple-900 italic">
+                                  Conservé à l'obscurité (non exposé)
+                                </div>
+                              ) : (
+                                <select
+                                  value={currentFace}
+                                  onChange={(e) => handleUpdateSpecimenFace(batch.id, panel.id, e.target.value as ExposureFace)}
+                                  disabled={isExcluded}
+                                  className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+                                >
+                                  <option value="Face externe">Face externe (côté soleil)</option>
+                                  <option value="Face interne">Face interne (côté coeur)</option>
+                                </select>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
+                        {/* Status / Exclusion info */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
                           <span
-                            className={`px-1.5 py-0.5 text-[9px] font-bold rounded ${
+                            className={`px-1.5 py-0.5 font-bold rounded ${
                               isExcluded ? 'bg-rose-200 text-rose-800' : 'bg-emerald-100 text-emerald-800'
                             }`}
                           >
                             {panel.status}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono">#{panel.index}</span>
+                          <span className="text-slate-400 font-mono">
+                            {dimLength}×{dimWidth} mm
+                          </span>
                         </div>
-                      </div>
 
-                      {isExcluded && (
-                        <div className="mt-2 pt-2 border-t border-rose-200 text-[10px] text-rose-800 space-y-0.5">
-                          <p className="font-bold">Motif :</p>
-                          <p className="italic line-clamp-2">{panel.exclusionReason}</p>
-                          <p className="text-[9px] text-rose-600 mt-0.5">
-                            Par {panel.excludedBy} le {new Date(panel.excludedAt || '').toLocaleDateString('fr-FR')}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        {isExcluded && (
+                          <div className="mt-1 pt-1 border-t border-rose-200 text-[10px] text-rose-800 space-y-0.5">
+                            <p className="font-bold">Motif d'exclusion :</p>
+                            <p className="italic line-clamp-2">{panel.exclusionReason}</p>
+                            <p className="text-[9px] text-rose-600 mt-0.5">
+                              Par {panel.excludedBy} le {new Date(panel.excludedAt || '').toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );
@@ -343,7 +503,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
               <strong>
                 {selectedPanelForExclusion.batch.reference} — {selectedPanelForExclusion.panel.label}
               </strong>
-              . Elle ne sera plus prise en compte dans les calculs inter-panneaux ultérieurs, mais ses données antérieures resteront tracées.
+              . Les données antérieures restent intégralement archivées, mais elle sera écartée des synthèses normatives ultérieures.
             </div>
 
             {exclusionError && (
@@ -372,7 +532,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
                 rows={3}
                 value={exclusionReason}
                 onChange={(e) => setExclusionReason(e.target.value)}
-                placeholder="Explication technique : défaut de substrat, fissuration accidentelle, fente bois..."
+                placeholder="Explication technique : fente substrat, défaut d'adhérence non représentatif, choc mécanique..."
                 className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
               />
             </div>
@@ -404,7 +564,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h4 className="font-bold text-base text-slate-900 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-blue-600" />
-                Ajouter un Lot Expérimental
+                Ajouter un Lot Expérimental (T + 3 E)
               </h4>
               <button
                 onClick={() => setShowAddBatchModal(false)}
@@ -430,21 +590,16 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Nombre de Panneaux
+                  Structure des Éprouvettes
                 </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={24}
-                  value={newBatchPanelCount}
-                  onChange={(e) => setNewBatchPanelCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold"
-                />
+                <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-700">
+                  4 Éprouvettes (T, 1, 2, 3)
+                </div>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Essence de bois
+                  Essence de bois (Lot)
                 </label>
                 <input
                   type="text"
@@ -456,7 +611,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Produit / Finition
+                  Produit / Référence (Lot)
                 </label>
                 <input
                   type="text"
@@ -469,14 +624,14 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
 
               <div className="col-span-2">
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Système de finition
+                  Système de finition (Lot)
                 </label>
                 <input
                   type="text"
                   value={newBatchCoating}
                   onChange={(e) => setNewBatchCoating(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  placeholder="Description du système..."
+                  placeholder="Description du système appliqué..."
                 />
               </div>
             </div>
@@ -494,7 +649,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
                 onClick={handleAddBatch}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
               >
-                Créer le Lot
+                Créer le Lot avec ses 4 Éprouvettes
               </button>
             </div>
           </div>
@@ -503,3 +658,4 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
     </div>
   );
 }
+

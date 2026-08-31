@@ -22,6 +22,8 @@ import {
 
 export interface TrialMetadata {
   reference: string;                 // ex: "QUV-2026-042"
+  orderNumber?: string;              // Commande ex: "CO-VAN2026-001"
+  reportNumber?: string;             // Rapport d'essai ex: "RA-VAN2026-001"
   title?: string;
   projectOrClient?: string;
   coatingSystemDescription?: string;
@@ -35,18 +37,67 @@ export type ExposureStageType =
   | 'INTERMEDIATE_DURING_EXPOSURE'
   | 'FINAL_POST_EXPOSURE';
 
+/**
+ * Orientation du fil du bois — Liste contrôlée (GATE 2.1)
+ */
+export type WoodGrainOrientation =
+  | 'Quartier'
+  | 'Faux quartier'
+  | 'Dosse'
+  | 'Sur quartier (NF EN 927-6)'
+  | 'Sur dosse'
+  | 'QUARTER_SAWN'
+  | 'SLASH_SAWN'
+  | 'MIXED'
+  | 'STANDARD'
+  | 'QUARTER'
+  | 'FALSE_QUARTER'
+  | 'SLASH'
+  | string;
+
+/**
+ * Face d'exposition UV — Liste contrôlée (GATE 2.1)
+ */
+export type ExposureFace =
+  | 'Face externe'
+  | 'Face interne'
+  | 'Face avant'
+  | 'Face avant (fil longitudinal)'
+  | 'Face radiale (fil longitudinal)'
+  | 'Face tangentielle'
+  | 'EXTERNAL_FACE'
+  | 'INTERNAL_FACE'
+  | string;
+
+/**
+ * Rôle explicite de l'éprouvette (GATE 2.1 & 2.2)
+ * T = Témoin non exposé (obscurité)
+ * E1, E2, E3 = Éprouvettes exposées au vieillissement UV
+ */
+export type SpecimenRole =
+  | 'WITNESS'
+  | 'EXPOSED_1'
+  | 'EXPOSED_2'
+  | 'EXPOSED_3'
+  | 'EXPOSED_CUSTOM';
+
+export type SpecimenRoleCode = 'T' | 'E1' | 'E2' | 'E3' | 'E';
+
+export interface ProjectDimensions {
+  lengthMm?: number;                  // ex: 150
+  widthMm?: number;                   // ex: 75
+  thicknessMm?: number;               // ex: 15
+  unit: 'mm' | 'cm';
+}
+
 export interface CommonCharacteristics {
-  dimensions?: {
-    lengthMm?: number;
-    widthMm?: number;
-    thicknessMm?: number;
-    unit: 'mm' | 'cm';
-  };
-  substrateNature?: string;            // ex: "Bois massif", "Panneau dérivé", "Plaque témoin"
-  materialType?: string;               // ex: "Pin sylvestre (NF EN 927-6)", "Chêne", "Mélèze"
-  woodGrainOrientation?: 'QUARTER_SAWN' | 'SLASH_SAWN' | 'MIXED' | 'STANDARD' | string; // ex: "Sur quartier (NF EN 927-6)"
-  preparationNotes?: string;           // ex: "Ponçage P120, dépoussiérage, stabilisation 20°C/65% HR"
-  conditioningNotes?: string;          // ex: "Stabilisation 7 jours selon NF EN 927-6 §5"
+  dimensions?: ProjectDimensions;     // Dimensions uniques et communes au niveau PROJET
+  substrateNature?: string;          // ex: "Bois massif", "Panneau dérivé", "Plaque témoin"
+  materialType?: string;             // ex: "Pin sylvestre (NF EN 927-6)", "Chêne", "Mélèze"
+  woodGrainOrientation?: WoodGrainOrientation; // Optionnel au niveau projet
+  preparationNotes?: string;         // ex: "Ponçage P120, dépoussiérage, stabilisation 20°C/65% HR"
+  substratePreparation?: string;
+  conditioningNotes?: string;        // ex: "Stabilisation 7 jours selon NF EN 927-6 §5"
   generalProtocolNotes?: string;
 }
 
@@ -87,8 +138,12 @@ export interface ExposureStage {
 export interface PanelDefinition {
   id: UUID;
   batchId: UUID;
-  index: number;
-  label: string;
+  index: number;                     // 1..4
+  label: string;                     // ex: "T", "E1", "E2", "E3" ou "P01"
+  role?: SpecimenRole;               // Rôle explicite dans le modèle
+  roleCode?: SpecimenRoleCode;       // Code rôle explicite 'T' | 'E1' | 'E2' | 'E3'
+  grainOrientation?: WoodGrainOrientation; // Orientation du fil individuelle (Quartier, Faux quartier, Dosse)
+  exposureFace?: ExposureFace;        // Face d'exposition individuelle (Face externe, Face interne)
   status: PanelStatus;
   position?: string;
   exclusionReason?: string;
@@ -100,12 +155,14 @@ export interface PanelDefinition {
 export interface BatchDefinition {
   id: UUID;
   trialId: UUID;
-  reference: string;                 // ex: "XX1C"
+  reference: string;                 // ex: "LOT XG2F" ou "XX1C"
   orderIndex: number;
-  woodSpecies?: string;              // ex: "Pin sylvestre standardisé"
-  productReference?: string;         // ex: "Lasure Hydro V33 Satin"
+  woodSpecies?: string;              // Essence spécifique au LOT (ex: "Pin sylvestre standardisé")
+  productReference?: string;         // Produit appliqué sur le LOT
+  coatingSystem?: string;            // Système appliqué sur le LOT
+  grainOrientation?: WoodGrainOrientation; // Orientation du fil spécifique au LOT
+  exposureFace?: ExposureFace;        // Face d'exposition spécifique au LOT
   manufacturerOrSupplier?: string;   // ex: "Fabricant A"
-  coatingSystem?: string;            // ex: "Impression + 2 couches finition"
   coatCount?: number;                // ex: 3
   substratePreparation?: string;     // ex: "Ponçage grain P120"
   applicationMethod?: string;        // ex: "Pinceau", "Pistolet"
@@ -113,7 +170,7 @@ export interface BatchDefinition {
   applicationDate?: string;          // ex: "2026-08-15"
   dryingOrConditioningTime?: string; // ex: "7 jours à 23°C/50% HR"
   batchNotes?: string;
-  panels: PanelDefinition[];
+  panels: PanelDefinition[];         // Exactement 4 éprouvettes (T, E1, E2, E3)
 }
 
 export interface FamilyProtocolConfig {
@@ -154,12 +211,15 @@ export interface PanelAcquisitionRecord<TRaw = unknown, TComputed = unknown> {
   mediaIds: UUID[];
 }
 
+export type MediaStatus = 'ACTIVE' | 'ARCHIVED';
+
 export interface MediaReference {
   id: UUID;
   trialId: UUID;
   panelId?: UUID;
   stageId?: UUID;
   type: 'PHOTO' | 'DOCUMENT';
+  status?: MediaStatus; // 'ACTIVE' | 'ARCHIVED' (par défaut ACTIVE)
   storageKey: string;
   filename: string;
   mimeType: string;
@@ -167,6 +227,9 @@ export interface MediaReference {
   capturedAt: ISODateString;
   capturedBy: string;
   caption?: string;
+  replacedAt?: ISODateString;
+  replacedBy?: string;
+  replacementMediaId?: UUID;
 }
 
 export interface AuditEvent {

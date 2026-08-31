@@ -26,19 +26,20 @@ interface Props {
 
 export function Tab01Identification({ trial, onTrialUpdated }: Props) {
   const [title, setTitle] = useState(trial.metadata.title);
+  const [orderNumber, setOrderNumber] = useState(trial.metadata.orderNumber || 'CO-VAN2026-001');
+  const [reportNumber, setReportNumber] = useState(trial.metadata.reportNumber || 'RA-VAN2026-001');
   const [projectOrClient, setProjectOrClient] = useState(trial.metadata.projectOrClient || '');
   const [coatingSystemDescription, setCoatingSystemDescription] = useState(trial.metadata.coatingSystemDescription || '');
   const [substrateDescription, setSubstrateDescription] = useState(trial.metadata.substrateDescription || '');
   const [generalNotes, setGeneralNotes] = useState(trial.metadata.generalNotes || '');
 
-  // Caractéristiques communes
+  // Caractéristiques communes (Niveau PROJET)
   const [lengthMm, setLengthMm] = useState<number>(trial.commonCharacteristics?.dimensions?.lengthMm || 150);
   const [widthMm, setWidthMm] = useState<number>(trial.commonCharacteristics?.dimensions?.widthMm || 75);
   const [thicknessMm, setThicknessMm] = useState<number>(trial.commonCharacteristics?.dimensions?.thicknessMm || 15);
   const [dimUnit, setDimUnit] = useState<'mm' | 'cm'>(trial.commonCharacteristics?.dimensions?.unit || 'mm');
   const [substrateNature, setSubstrateNature] = useState<string>(trial.commonCharacteristics?.substrateNature || 'Bois massif');
   const [materialType, setMaterialType] = useState<string>(trial.commonCharacteristics?.materialType || 'Pin sylvestre (NF EN 927-6)');
-  const [woodGrainOrientation, setWoodGrainOrientation] = useState<string>(trial.commonCharacteristics?.woodGrainOrientation || 'Sur quartier (NF EN 927-6)');
   const [preparationNotes, setPreparationNotes] = useState<string>(trial.commonCharacteristics?.preparationNotes || 'Ponçage P120, dépoussiérage');
   const [conditioningNotes, setConditioningNotes] = useState<string>(trial.commonCharacteristics?.conditioningNotes || 'Conditionnement 7 jours à 20±2°C / 65±5% HR');
   const [generalProtocolNotes, setGeneralProtocolNotes] = useState<string>(trial.commonCharacteristics?.generalProtocolNotes || '');
@@ -48,6 +49,8 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
 
   const handleSave = () => {
     trial.metadata.title = title.trim();
+    trial.metadata.orderNumber = orderNumber.trim();
+    trial.metadata.reportNumber = reportNumber.trim();
     trial.metadata.projectOrClient = projectOrClient.trim();
     trial.metadata.coatingSystemDescription = coatingSystemDescription.trim();
     trial.metadata.substrateDescription = substrateDescription.trim();
@@ -62,7 +65,6 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
       },
       substrateNature: substrateNature.trim(),
       materialType: materialType.trim(),
-      woodGrainOrientation: woodGrainOrientation.trim(),
       preparationNotes: preparationNotes.trim(),
       conditioningNotes: conditioningNotes.trim(),
       generalProtocolNotes: generalProtocolNotes.trim()
@@ -127,7 +129,7 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
           1. Identification Administrative & Contexte
         </h4>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
               Référence Essai (Immuable)
@@ -142,13 +144,27 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Opérateur / Responsable Création
+              N° Commande (CO-VANXXXX)
             </label>
             <input
               type="text"
-              value={trial.metadata.createdBy}
-              disabled
-              className="w-full text-xs px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed font-medium"
+              value={orderNumber}
+              onChange={(e) => setOrderNumber(e.target.value)}
+              placeholder="Ex: CO-VAN2026-001"
+              className="w-full text-xs font-mono font-semibold px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              N° Rapport (RA-VANXXXX)
+            </label>
+            <input
+              type="text"
+              value={reportNumber}
+              onChange={(e) => setReportNumber(e.target.value)}
+              placeholder="Ex: RA-VAN2026-001"
+              className="w-full text-xs font-mono font-semibold px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -179,66 +195,84 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-            Notes Générales & Contexte d'Essai
-          </label>
-          <textarea
-            rows={2}
-            value={generalNotes}
-            onChange={(e) => setGeneralNotes(e.target.value)}
-            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Opérateur / Responsable Création
+            </label>
+            <input
+              type="text"
+              value={trial.metadata.createdBy}
+              disabled
+              className="w-full text-xs px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Notes Générales & Contexte d'Essai
+            </label>
+            <input
+              type="text"
+              value={generalNotes}
+              onChange={(e) => setGeneralNotes(e.target.value)}
+              className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Contexte général de l'étude..."
+            />
+          </div>
         </div>
       </div>
 
       {/* Form Grid 2 : Caractéristiques Communes */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center justify-between">
-          <span>2. Caractéristiques Communes des Éprouvettes (NF EN 927-6 §5)</span>
-          <span className="text-slate-400 font-normal normal-case">Applicable à tous les lots de l'essai</span>
+          <span>2. Dimensions Communes des Éprouvettes (Niveau PROJET)</span>
+          <span className="text-blue-600 font-bold normal-case">Saisies UNE SEULE FOIS pour tout le projet</span>
         </h4>
 
         {/* Dimensions */}
-        <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-3">
-          <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-blue-600" />
-            Dimensions des éprouvettes
-          </span>
+        <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/40 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-blue-600" />
+              Dimensions physiques uniques applicables à tous les lots et éprouvettes
+            </span>
+            <span className="text-[11px] text-slate-500 italic">NF EN 927-6 §5 : 150 × 75 × 15 mm recommandé</span>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div>
-              <label className="block text-slate-600 mb-1 font-medium">Longueur</label>
+              <label className="block text-slate-700 mb-1 font-semibold">Longueur ({dimUnit})</label>
               <input
                 type="number"
                 value={lengthMm}
                 onChange={(e) => setLengthMm(Number(e.target.value))}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-medium"
               />
             </div>
             <div>
-              <label className="block text-slate-600 mb-1 font-medium">Largeur</label>
+              <label className="block text-slate-700 mb-1 font-semibold">Largeur ({dimUnit})</label>
               <input
                 type="number"
                 value={widthMm}
                 onChange={(e) => setWidthMm(Number(e.target.value))}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-medium"
               />
             </div>
             <div>
-              <label className="block text-slate-600 mb-1 font-medium">Épaisseur</label>
+              <label className="block text-slate-700 mb-1 font-semibold">Épaisseur ({dimUnit})</label>
               <input
                 type="number"
                 value={thicknessMm}
                 onChange={(e) => setThicknessMm(Number(e.target.value))}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-medium"
               />
             </div>
             <div>
-              <label className="block text-slate-600 mb-1 font-medium">Unité</label>
+              <label className="block text-slate-700 mb-1 font-semibold">Unité de mesure</label>
               <select
                 value={dimUnit}
                 onChange={(e) => setDimUnit(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-medium"
               >
                 <option value="mm">mm</option>
                 <option value="cm">cm</option>
@@ -247,10 +281,10 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div>
             <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Nature du support
+              Nature du support (Général)
             </label>
             <input
               type="text"
@@ -263,27 +297,14 @@ export function Tab01Identification({ trial, onTrialUpdated }: Props) {
 
           <div>
             <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Type de matériau / Essence
+              Essence par défaut (Précisée par lot dans l'onglet 02)
             </label>
             <input
               type="text"
               value={materialType}
               onChange={(e) => setMaterialType(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
-              placeholder="Ex: Pin sylvestre standardisé"
-            />
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-              Orientation du fil du bois
-            </label>
-            <input
-              type="text"
-              value={woodGrainOrientation}
-              onChange={(e) => setWoodGrainOrientation(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
-              placeholder="Ex: Sur quartier (NF EN 927-6)"
+              placeholder="Ex: Pin sylvestre standardisé (NF EN 927-6)"
             />
           </div>
         </div>

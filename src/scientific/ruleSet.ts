@@ -142,6 +142,9 @@ export function createCountConfiguration(
     ? (ref.origin || 'NORMATIVE_REQUIREMENT')
     : 'PROTOCOL_ADAPTATION';
 
+  const isLabOrigin = ref.origin === 'LAB_RECOMMENDATION' || ref.ruleSource === 'LABORATORY' || ref.ruleSource === 'LAB_RECOMMENDATION';
+  const ruleSource: RuleSource = isLabOrigin ? 'LABORATORY' : (ref.ruleSource || origin);
+
   return {
     familyId,
     mode: isStandard ? 'STANDARD_DEFAULT' : 'CUSTOM_JUSTIFIED',
@@ -158,7 +161,7 @@ export function createCountConfiguration(
       : `Adaptation du plan de mesure (${configuredCount} relevés au lieu des ${ref.standardRecommendedCount} recommandés)`,
     configuredBy: options?.operatorId || 'OPERATOR',
     configuredAt: new Date().toISOString(),
-    ruleSource: origin
+    ruleSource
   };
 }
 
@@ -201,6 +204,9 @@ export function createSeriesConfiguration(
     ? (ref.origin || 'NORMATIVE_REQUIREMENT')
     : 'PROTOCOL_ADAPTATION';
 
+  const isLabOrigin = ref.origin === 'LAB_RECOMMENDATION' || ref.ruleSource === 'LABORATORY' || ref.ruleSource === 'LAB_RECOMMENDATION';
+  const ruleSource: RuleSource = isLabOrigin ? 'LABORATORY' : (ref.ruleSource || origin);
+
   return {
     familyId,
     mode: isStandard ? 'STANDARD_DEFAULT' : 'CUSTOM_JUSTIFIED',
@@ -223,6 +229,6 @@ export function createSeriesConfiguration(
       : `Adaptation de la structure de mesure (${seriesCount} × ${readingsPerSeries} au lieu de ${ref.standardConfiguration.seriesCount} × ${ref.standardConfiguration.readingsPerSeries})`,
     configuredBy: options?.operatorId || 'OPERATOR',
     configuredAt: new Date().toISOString(),
-    ruleSource: origin
+    ruleSource
   };
 }

@@ -1,21 +1,14 @@
 /**
- * QUV-Lab — Comparaisons Avancées Multi-Lots & Dispersion (PROMPT 7 - Sections 27, 28, 29, 30, 31)
+ * QUV-Lab — Comparaisons Croisées Inter-Lots (PROMPT 7 - Section 12 & 13)
+ * Compare les performances inter-lots à étape constante en garantissant l'exclusion stricte du témoin T.
  */
 
 import React, { useState } from 'react';
-import { Trial } from '../../types/trial';
+import { Trial, BatchDefinition, ExposureStage } from '../../types/trial';
 import { ScientificRuleSet, MeasurementFamilyId } from '../../types/scientific';
 import { aggregateBatchColor, aggregateBatchGloss } from '../../scientific/aggregations';
-import {
-  GitCompare,
-  Layers,
-  Sparkles,
-  Info,
-  Calendar,
-  BarChart2,
-  CheckCircle2,
-  AlertTriangle
-} from 'lucide-react';
+import { GitCompare, Layers, TrendingUp, Info, CheckCircle2 } from 'lucide-react';
+import { getActiveExposedPanels, getActiveStages } from '../../scientific/panelUtils';
 
 interface Props {
   trial: Trial;
@@ -23,12 +16,13 @@ interface Props {
 }
 
 export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
+  const activeStages = getActiveStages(trial.stages);
   const [selectedStageId, setSelectedStageId] = useState<string>(
-    trial.stages.find((s) => s.status === 'VALIDATED' && s.cycleIndex > 0)?.id || trial.stages[1]?.id || trial.stages[0]?.id
+    activeStages.length > 1 ? activeStages[1].id : activeStages[0]?.id || ''
   );
   const [comparisonFamily, setComparisonFamily] = useState<MeasurementFamilyId>('COLOR');
 
-  const activeStage = trial.stages.find((s) => s.id === selectedStageId) || trial.stages[1];
+  const activeStage = activeStages.find((s) => s.id === selectedStageId) || activeStages[0];
 
   return (
     <div className="space-y-6">
@@ -40,7 +34,7 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
             Comparaisons Croisées Inter-Lots & Étude de Dispersion
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Analyse comparative de performance à étape d'exposition constante
+            Analyse comparative de performance sur éprouvettes exposées à étape d'exposition constante (Témoins T exclus)
           </p>
         </div>
 
@@ -48,11 +42,11 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
           {/* Sélecteur d'étape */}
           <div>
             <select
-              value={activeStage.id}
+              value={activeStage?.id}
               onChange={(e) => setSelectedStageId(e.target.value)}
               className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             >
-              {trial.stages.map((st) => (
+              {activeStages.map((st) => (
                 <option key={st.id} value={st.id}>
                   {st.name} ({st.scheduledExposureHours} h)
                 </option>
@@ -85,7 +79,7 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-600" />
-            Performance Comparée des Lots à {activeStage.scheduledExposureHours} h ({activeStage.name})
+            Performance Comparée des Lots à {activeStage?.scheduledExposureHours} h ({activeStage?.name})
           </h3>
           <span className="text-xs bg-blue-100 text-blue-900 px-2.5 py-1 rounded-lg font-bold">
             {trial.batches.length} lots comparés
@@ -99,10 +93,10 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
                 <th className="p-2.5">Lot & Référence</th>
                 <th className="p-2.5">Système / Formulation</th>
                 <th className="p-2.5">Essence Bois</th>
-                <th className="p-2.5 text-center">Éprouvettes</th>
+                <th className="p-2.5 text-center">Exposés E1..E3</th>
                 {comparisonFamily === 'COLOR' && (
                   <>
-                    <th className="p-2.5 bg-indigo-50/60 text-indigo-950 font-black">ΔE* Moyen Lot</th>
+                    <th className="p-2.5 bg-indigo-50/60 text-indigo-950 font-black">ΔE* Moyen Exposés</th>
                     <th className="p-2.5 bg-indigo-50/60 text-indigo-950">Dispersion inter (s)</th>
                     <th className="p-2.5">ΔL* Moyen</th>
                     <th className="p-2.5">Δa* Moyen</th>
@@ -129,21 +123,24 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {trial.batches.map((batch) => {
-                const activePanels = batch.panels.filter((p) => p.status === 'ACTIVE');
+                // Exclusion stricte du Témoin T des agrégations
+                const activePanels = getActiveExposedPanels(batch.panels);
                 const colorComputedList: any[] = [];
                 const glossComputedList: any[] = [];
                 const persozComputedList: any[] = [];
 
-                activePanels.forEach((p) => {
-                  const cAcq = trial.acquisitions[`${activeStage.id}__${p.id}__COLOR`];
-                  if (cAcq?.computed) colorComputedList.push(cAcq.computed);
+                if (activeStage) {
+                  activePanels.forEach((p) => {
+                    const cAcq = trial.acquisitions[`${activeStage.id}__${p.id}__COLOR`];
+                    if (cAcq?.computed) colorComputedList.push(cAcq.computed);
 
-                  const gAcq = trial.acquisitions[`${activeStage.id}__${p.id}__GLOSS`];
-                  if (gAcq?.computed) glossComputedList.push(gAcq.computed);
+                    const gAcq = trial.acquisitions[`${activeStage.id}__${p.id}__GLOSS`];
+                    if (gAcq?.computed) glossComputedList.push(gAcq.computed);
 
-                  const pAcq = trial.acquisitions[`${activeStage.id}__${p.id}__PERSOZ`];
-                  if (pAcq?.computed) persozComputedList.push(pAcq.computed);
-                });
+                    const pAcq = trial.acquisitions[`${activeStage.id}__${p.id}__PERSOZ`];
+                    if (pAcq?.computed) persozComputedList.push(pAcq.computed);
+                  });
+                }
 
                 const isMissing =
                   comparisonFamily === 'COLOR'
@@ -152,7 +149,7 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
                     ? glossComputedList.length === 0
                     : persozComputedList.length === 0;
 
-                if (isMissing) {
+                if (isMissing || !activeStage) {
                   return (
                     <tr key={batch.id} className="text-slate-400">
                       <td className="p-2.5 font-bold font-mono text-slate-700">{batch.reference}</td>
@@ -226,25 +223,23 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
                             : '—'}
                         </td>
                         <td className="p-2.5 font-mono text-slate-700">
-                          {glossAgg.meanDeltaGloss !== null && glossAgg.meanDeltaGloss !== undefined
-                            ? `${glossAgg.meanDeltaGloss > 0 ? '+' : ''}${glossAgg.meanDeltaGloss.toFixed(1)} GU`
-                            : 'RÉF'}
+                          {glossAgg.meanGlossVariation !== null ? glossAgg.meanGlossVariation?.toFixed(1) : '—'}
                         </td>
                       </>
                     )}
 
                     {comparisonFamily === 'PERSOZ' && (
                       <>
-                        <td className="p-2.5 font-mono text-amber-950 font-black bg-amber-50/40">
+                        <td className="p-2.5 font-mono text-amber-950 font-bold bg-amber-50/40">
                           {meanP !== '—' ? `${meanP} s` : '—'}
                         </td>
-                        <td className="p-2.5 font-mono text-slate-600">
-                          {persozComputedList[0]?.stdDevDampingTime?.toFixed(2) ?? '—'}
+                        <td className="p-2.5 font-mono text-slate-600 bg-amber-50/40">
+                          {persozComputedList[0]?.interPanelStdDev !== undefined ? persozComputedList[0]?.interPanelStdDev : '—'}
                         </td>
                         <td className="p-2.5 font-mono text-slate-700">
-                          {persozComputedList[0]?.deltaDampingTime !== null && persozComputedList[0]?.deltaDampingTime !== undefined
-                            ? `${persozComputedList[0].deltaDampingTime > 0 ? '+' : ''}${persozComputedList[0].deltaDampingTime.toFixed(1)} s`
-                            : 'RÉF'}
+                          {persozComputedList[0]?.relativeHardnessVariationPercent !== undefined
+                            ? `${persozComputedList[0]?.relativeHardnessVariationPercent > 0 ? '+' : ''}${persozComputedList[0]?.relativeHardnessVariationPercent?.toFixed(1)} %`
+                            : '—'}
                         </td>
                       </>
                     )}

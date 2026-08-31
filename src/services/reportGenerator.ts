@@ -200,8 +200,18 @@ export function buildScientificReport(
 
   const sections = {
     identification: `Essai référence : ${trial.metadata.reference}\nTitre de l'étude : ${trial.metadata.title || 'Non spécifié'}\nClient / Projet : ${trial.metadata.projectOrClient || 'Standard'}\nOpérateur de génération : ${options.operatorId}\nDate d'émission : ${new Date(now).toLocaleString('fr-FR')}\nStatut de l'essai : ${trial.status} (Configuration : ${trial.configurationStatus})`,
-    studyPurpose: `Caractérisation de la durabilité et du comportement au vieillissement accéléré de revêtements pour bois selon le référentiel d'exposition alternée UV / condensation NF EN 927-6 (cycles de 168 heures, durée totale programmée de 2016 heures).\nDescription du système : ${trial.metadata.coatingSystemDescription || 'N/A'}\nDescription du support : ${trial.metadata.substrateDescription || 'N/A'}`,
-    normativeReferences: `• Référentiel principal : NF EN 927-6 (Peintures et vernis - Produits de peinture et systèmes de peinture pour le bois extérieur - Partie 6 : Exposition des revêtements pour bois au vieillissement artificiel par des lampes UV fluorescentes et de l'eau).\n• Colorimétrie : ISO 7724 / CIE L*a*b* (Illuminant D65, Observateur 10°, Géométrie 45°/0° ou d/8°).\n• Brillance : ISO 2813 (Réflectomètre géométrie 60° selon et perpendiculairement au fil du bois).\n• Recommandation Laboratoire Dureté : ISO 1522 (Pendule d'amortissement Persoz - LAB_RECOMMENDATION).\n• Dégradations de surface : ISO 4628 parties 1 à 6 (Cloquage, Écaillage, Craquelage, Farinage) & ISO 2409 (Quadrillage).`,
+    studyPurpose: `Caractérisation de la durabilité et du comportement au vieillissement artificiel accéléré de revêtements pour bois selon le référentiel d'exposition alternée UV / condensation NF EN 927-6:2018 (cycles de 168 heures, durée totale programmée de 2016 heures).\nLe module QUV concerne exclusivement le vieillissement artificiel.\nDescription du système : ${trial.metadata.coatingSystemDescription || 'N/A'}\nDescription du support : ${trial.metadata.substrateDescription || 'N/A'}`,
+    normativeReferences: `RÉFÉRENTIEL NORMATIF DU MODULE QUV (Vieillissement artificiel exclusif) :\n` +
+      `• RÉFÉRENTIEL PRINCIPAL (NORMATIF QUV) : NF EN 927-6:2018 (Peintures et vernis - Exposition des revêtements pour bois au vieillissement artificiel par des lampes UV fluorescentes et de l'eau).\n` +
+      `• AUTRES RÉFÉRENTIELS APPLICABLES :\n` +
+      `  - NF P 23-305:2026 : Uniquement lorsque ses exigences sont pertinentes pour le périmètre de l'essai QUV (revêtements de menuiseries extérieures) ; ne remplace pas les exigences spécifiques de NF EN 927-6.\n` +
+      `  - INFIPERF / FCBA : Critères complémentaires de laboratoire (ex. dureté Persoz ISO 1522, seuils indicatifs de rétention) ; toujours identifié comme référentiel complémentaire et non comme exigence NF EN 927-6.\n` +
+      `• HORS PÉRIMÈTRE QUV :\n` +
+      `  - NF EN 927-3:2019 (Vieillissement naturel) : NE PAS utiliser pour le moteur de conformité QUV ni pour définir les calculs ou seuils QUV. Elle sera traitée ultérieurement dans le module de vieillissement naturel (VN).\n` +
+      `• NORMES D'ÉVALUATION ET DE MESURE ASSOCIÉES :\n` +
+      `  - Colorimétrie : ISO 7724 / CIE L*a*b* (Illuminant D65, Observateur 10°, ΔE*ab 1976).\n` +
+      `  - Brillance : ISO 2813 (Réflectomètre géométrie 60° sens longitudinal et perpendiculaire au fil).\n` +
+      `  - Dégradations de surface : ISO 4628 parties 1 à 6 (Cloquage, Écaillage, Craquelage, Farinage) & ISO 2409.`,
     materialsAndBatches: `Nombre total de lots : ${trial.batches.length}\n` +
       trial.batches
         .map(

@@ -7,6 +7,7 @@
 import { Trial, BatchDefinition, ExposureStage } from '../../types/trial';
 import { ScientificRuleSet } from '../../types/scientific';
 import { extractTemporalKinetics } from './TrendAnalyzer';
+import { getActiveExposedPanels } from '../panelUtils';
 
 export interface TechnicalSynthesisOptions {
   batchId?: string;
@@ -138,7 +139,7 @@ export function generateTechnicalSynthesis(
   // --------------------------------------------------------------------------
   // PHRASE 5 — OBSERVATIONS VISUELLES
   // --------------------------------------------------------------------------
-  const activePanels = targetBatch.panels.filter((p) => p.status === 'ACTIVE');
+  const activePanels = getActiveExposedPanels(targetBatch.panels);
   let hasRecordedObs = false;
   let maxBlister = 0;
   let maxFlake = 0;
