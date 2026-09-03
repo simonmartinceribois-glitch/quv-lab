@@ -56,16 +56,19 @@ export function runGate22RegressionTests(): {
   const createMockTrial = (): Trial => {
     const trialId = `trial-gate22-test-${Date.now()}`;
     const stages = generateStandardExposureStages(trialId);
+    const batchId = `${trialId}-b-1`;
     const panels: PanelDefinition[] = [
-      { id: `${trialId}-p-1`, label: '1', roleCode: 'E1', role: 'EXPOSED_1', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 1 },
-      { id: `${trialId}-p-2`, label: '2', roleCode: 'E2', role: 'EXPOSED_2', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 2 },
-      { id: `${trialId}-p-3`, label: '3', roleCode: 'E3', role: 'EXPOSED_3', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 3 },
-      { id: `${trialId}-p-T`, label: 'T', roleCode: 'T', role: 'WITNESS', batchId: `${trialId}-b-1`, status: 'ACTIVE', positionIndex: 4 }
+      { id: `${trialId}-p-1`, label: '1', roleCode: 'E1', role: 'EXPOSED_1', batchId, status: 'ACTIVE', index: 1 },
+      { id: `${trialId}-p-2`, label: '2', roleCode: 'E2', role: 'EXPOSED_2', batchId, status: 'ACTIVE', index: 2 },
+      { id: `${trialId}-p-3`, label: '3', roleCode: 'E3', role: 'EXPOSED_3', batchId, status: 'ACTIVE', index: 3 },
+      { id: `${trialId}-p-T`, label: 'T', roleCode: 'T', role: 'WITNESS', batchId, status: 'ACTIVE', index: 4 }
     ];
 
     const batches: BatchDefinition[] = [
       {
-        id: `${trialId}-b-1`,
+        id: batchId,
+        trialId,
+        orderIndex: 0,
         reference: 'LOT-TEST-A',
         productReference: 'Finition Acrylique Pro',
         woodSpecies: 'Pin Sylvestre',
@@ -107,8 +110,7 @@ export function runGate22RegressionTests(): {
       batches,
       acquisitions: {},
       mediaReferences: [],
-      auditTrail: [],
-      auditEvents: []
+      auditTrail: []
     };
 
     return trial;
@@ -160,7 +162,7 @@ export function runGate22RegressionTests(): {
         familyId: 'COLOR',
         raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
         computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
-        status: 'VALIDATED',
+        status: 'COMPLETE',
         alerts: [],
         trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
         mediaIds: []
@@ -174,7 +176,7 @@ export function runGate22RegressionTests(): {
         familyId: 'GLOSS',
         raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
         computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
-        status: 'VALIDATED',
+        status: 'COMPLETE',
         alerts: [],
         trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
         mediaIds: []
@@ -192,7 +194,7 @@ export function runGate22RegressionTests(): {
       familyId: 'COLOR',
       raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
       computed: { meanL: 50, meanA: 0, meanB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       alerts: [],
       trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
       mediaIds: []
@@ -206,7 +208,7 @@ export function runGate22RegressionTests(): {
       familyId: 'GLOSS',
       raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
       computed: { meanGloss: 60, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       alerts: [],
       trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
       mediaIds: []
@@ -225,7 +227,7 @@ export function runGate22RegressionTests(): {
         familyId: 'COLOR',
         raw: { readings: [{ pointIndex: 1, L: 56, a: 0, b: 0 }] },
         computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 6.0, deltaL: 6.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
-        status: 'VALIDATED',
+        status: 'COMPLETE',
         alerts: [],
         trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
         mediaIds: []
@@ -239,7 +241,7 @@ export function runGate22RegressionTests(): {
         familyId: 'GLOSS',
         raw: { readings: [{ pointIndex: 1, gloss60: 30 }] },
         computed: { meanGloss: 30, deltaGloss: -30, retentionRatePercent: 50, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
-        status: 'VALIDATED',
+        status: 'COMPLETE',
         alerts: [],
         trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
         mediaIds: []
@@ -256,7 +258,7 @@ export function runGate22RegressionTests(): {
       familyId: 'COLOR',
       raw: { readings: [{ pointIndex: 1, L: 50.1, a: 0, b: 0 }] },
       computed: { meanL: 50.1, meanA: 0, meanB: 0, deltaE: 0.1, deltaL: 0.1, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       alerts: [],
       trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
       mediaIds: []
@@ -270,7 +272,7 @@ export function runGate22RegressionTests(): {
       familyId: 'GLOSS',
       raw: { readings: [{ pointIndex: 1, gloss60: 60 }] },
       computed: { meanGloss: 60, deltaGloss: 0, retentionRatePercent: 100, validCount: 1, stdDev: 0, protocolStatus: 'STANDARD' },
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       alerts: [],
       trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' },
       mediaIds: []
@@ -310,7 +312,7 @@ export function runGate22RegressionTests(): {
         batchId: mock.batches[0].id,
         panelId: pId,
         familyId: 'COLOR',
-        status: 'VALIDATED',
+        status: 'COMPLETE',
         raw: { readings: [{ pointIndex: 1, L: 56, a: 0, b: 0 }] },
         computed: { meanL: 56, meanA: 0, meanB: 0, deltaE: 8.0, deltaL: 8.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
         alerts: [],
@@ -326,7 +328,7 @@ export function runGate22RegressionTests(): {
       batchId: mock.batches[0].id,
       panelId: `${mock.id}-p-T`,
       familyId: 'COLOR',
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       raw: { readings: [{ pointIndex: 1, L: 50, a: 0, b: 0 }] },
       computed: { meanL: 50, meanA: 0, meanB: 0, deltaE: 0.0, deltaL: 0.0, deltaA: 0, deltaB: 0, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
       alerts: [],
@@ -384,11 +386,10 @@ export function runGate22RegressionTests(): {
     );
   }
 
-  // Test B2 : Désactivation non-destructive et réactivation de jalon intermédiaire
+  // Test B2 : Interdiction de désactiver un jalon mesuré et gestion non-destructive des jalons vierges
   {
     const mock = createMockTrial();
     const stageC2 = mock.stages[2]; // 336h
-    console.log(`\n[DEBUG B2] Initial C2 status: ${stageC2.status}`);
     // Ajouter une acquisition sur C2
     mock.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`] = {
       id: 'acq-c2-test',
@@ -397,7 +398,7 @@ export function runGate22RegressionTests(): {
       batchId: mock.batches[0].id,
       panelId: mock.batches[0].panels[0].id,
       familyId: 'COLOR',
-      status: 'VALIDATED',
+      status: 'COMPLETE',
       raw: { readings: [{ pointIndex: 1, L: 52, a: 1, b: 2 }] },
       computed: { meanL: 52, meanA: 1, meanB: 2, deltaE: 2, deltaL: 2, deltaA: 1, deltaB: 2, validCount: 1, stdDevL: 0, stdDevA: 0, stdDevB: 0, protocolStatus: 'STANDARD' },
       alerts: [],
@@ -406,53 +407,46 @@ export function runGate22RegressionTests(): {
     };
     globalTrialStore.saveTrial(mock);
 
-    // Check initial status for debugging
-    const savedTrial = globalTrialStore.getTrial(mock.id);
-    const savedStageC2 = savedTrial?.stages.find((s) => s.id === stageC2.id);
-    const initialStatus = savedStageC2?.status;
-    console.log(`[DEBUG B2] Saved C2 status: ${initialStatus}`);
+    // 1. RÈGLE MÉTIER : Un jalon contenant déjà des acquisitions scientifiques NE PEUT PAS être désactivé rétroactivement
+    let deactivationRejectedWithException = false;
+    let errorMessage = '';
+    try {
+      globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Tentative désactivation avec acquisitions');
+    } catch (err: any) {
+      deactivationRejectedWithException = true;
+      errorMessage = err.message || '';
+    }
 
-    // 1. Désactiver C2
-    console.log(`[DEBUG B2] Calling toggleStageStatus to deactivate C2...`);
-    globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Protocole allégé');
-    // Get fresh copy of trial to avoid reference mutation issues
-    let currentTrial = globalTrialStore.getTrial(mock.id);
-    if (!currentTrial) throw new Error('Trial not found after deactivation');
-    let stageC2Fresh = currentTrial.stages.find((s) => s.id === stageC2.id);
-    console.log(`[DEBUG B2] After toggle - C2 status: ${stageC2Fresh?.status}`);
-    // CAPTURE the status VALUES, not the objects
-    const inactiveStatus = stageC2Fresh?.status;
-    const activeStagesAfterDeact = getActiveStages(currentTrial.stages);
-    const isAcquisitionPreserved = Boolean(currentTrial.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`]);
-    console.log(`[DEBUG B2] Acquisition preserved: ${isAcquisitionPreserved}`);
-    console.log(`[DEBUG B2] Active stages after deactivation: ${activeStagesAfterDeact.map(s => `${s.cycleIndex}(${s.status})`).join(',')}`);
+    // Vérifier que le jalon C2 est resté actif et que ses acquisitions sont préservées
+    const trialAfterAttempt = globalTrialStore.getTrial(mock.id);
+    const stageC2AfterAttempt = trialAfterAttempt?.stages.find((s) => s.id === stageC2.id);
+    const isStageStillActive = stageC2AfterAttempt?.status !== 'INACTIVE';
+    const isAcquisitionPreserved = Boolean(trialAfterAttempt?.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`]);
 
-    // 2. Réactiver C2
-    console.log(`[DEBUG B2] Calling toggleStageStatus to reactivate C2...`);
-    globalTrialStore.toggleStageStatus(mock.id, stageC2.id, 'Tester', 'Réactivation');
-    // Get fresh copy of trial again
-    currentTrial = globalTrialStore.getTrial(mock.id);
-    if (!currentTrial) throw new Error('Trial not found after reactivation');
-    stageC2Fresh = currentTrial.stages.find((s) => s.id === stageC2.id);
-    console.log(`[DEBUG B2] After reactivation - C2 status: ${stageC2Fresh?.status}`);
-    const reactivatedStatus = stageC2Fresh?.status;
-    const activeStagesAfterReact = getActiveStages(currentTrial.stages);
-    console.log(`[DEBUG B2] Active stages after reactivation: ${activeStagesAfterReact.map(s => `${s.cycleIndex}(${s.status})`).join(',')}`);
+    // 2. Vérifier que sur un jalon intermédiaire sans acquisition (C3), la désactivation et réactivation restent possibles
+    const stageC3 = mock.stages[3];
+    globalTrialStore.toggleStageStatus(mock.id, stageC3.id, 'Tester', 'Désactivation jalon vierge');
+    let trialAfterC3Deact = globalTrialStore.getTrial(mock.id);
+    const stageC3Inactive = trialAfterC3Deact?.stages.find((s) => s.id === stageC3.id)?.status === 'INACTIVE';
+
+    globalTrialStore.toggleStageStatus(mock.id, stageC3.id, 'Tester', 'Réactivation jalon vierge');
+    let trialAfterC3React = globalTrialStore.getTrial(mock.id);
+    const stageC3Reactivated = trialAfterC3React?.stages.find((s) => s.id === stageC3.id)?.status !== 'INACTIVE';
 
     const passed =
-      inactiveStatus === 'INACTIVE' &&
-      !activeStagesAfterDeact.some((s) => s.id === stageC2.id) &&
+      deactivationRejectedWithException &&
+      isStageStillActive &&
       isAcquisitionPreserved &&
-      reactivatedStatus !== 'INACTIVE' &&
-      activeStagesAfterReact.some((s) => s.id === stageC2.id);
+      stageC3Inactive &&
+      stageC3Reactivated;
 
     record(
       'B2',
-      'Désactivation non-destructive de C2 et réactivation avec données préservées',
+      'Interdiction de désactiver rétroactivement un jalon contenant des acquisitions scientifiques',
       'TEST_B_JALONS',
       passed,
-      'INACTIVE -> getActiveStages exclut C2 -> Réactivation -> données intactes',
-      `Inactive status: ${inactiveStatus}, Données conservées: ${isAcquisitionPreserved}, Reactivated status: ${reactivatedStatus}`
+      'Exception levée lors de la tentative de désactivation de C2 + acquisitions intactes + bascule autorisée sur C3 vierge',
+      `Rejet exception: ${deactivationRejectedWithException} (${errorMessage}), Données C2 préservées: ${isAcquisitionPreserved}, C3 vierge toggle OK: ${stageC3Inactive && stageC3Reactivated}`
     );
   }
 

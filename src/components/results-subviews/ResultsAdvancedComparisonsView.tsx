@@ -223,7 +223,7 @@ export function ResultsAdvancedComparisonsView({ trial, ruleSet }: Props) {
                             : '—'}
                         </td>
                         <td className="p-2.5 font-mono text-slate-700">
-                          {glossAgg.meanGlossVariation !== null ? glossAgg.meanGlossVariation?.toFixed(1) : '—'}
+                          {glossAgg.meanDeltaGloss !== null && glossAgg.meanDeltaGloss !== undefined ? glossAgg.meanDeltaGloss?.toFixed(1) : '—'}
                         </td>
                       </>
                     )}

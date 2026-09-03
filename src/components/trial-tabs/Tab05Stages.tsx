@@ -10,7 +10,7 @@ import React, { useState } from 'react';
 import { Trial, ExposureStage } from '../../types/trial';
 import { MeasurementFamilyId } from '../../types/scientific';
 import { globalTrialStore } from '../../services/trialStore';
-import { isMandatoryStage } from '../../scientific/panelUtils';
+import { isMandatoryStage, getActiveFamiliesForStage } from '../../scientific/panelUtils';
 import {
   Calendar,
   Clock,
@@ -65,21 +65,32 @@ export function Tab05Stages({
   const totalActivePanelsCount = activePanels.length;
 
   // Calcul des statistiques de complétude par famille pour l'étape courante
+  // Familles de mesure applicables à ce jalon selon la règle métier (ex: ADHESION = T0 + C12 uniquement)
+  const stageActiveFamilies = getActiveFamiliesForStage(trial.config.activeFamilies || [], currentStage);
+
   const familyStats: Record<
-    MeasurementFamilyId,
+    string,
     { completed: number; total: number; warningCount: number; errorCount: number }
   > = {
     COLOR: { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 },
     GLOSS: { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 },
     PERSOZ: { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 },
+    ADHESION: { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 },
     OBSERVATIONS: { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 }
   };
 
+  // Garantir l'initialisation pour toute famille configurée
+  for (const fam of trial.config.activeFamilies || []) {
+    if (!familyStats[fam]) {
+      familyStats[fam] = { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 };
+    }
+  }
+
   for (const panel of activePanels) {
-    for (const fam of trial.config.activeFamilies) {
+    for (const fam of stageActiveFamilies) {
       const key = `${currentStage.id}__${panel.id}__${fam}`;
       const rec = trial.acquisitions[key];
-      if (rec && rec.computed) {
+      if (rec && rec.computed && familyStats[fam]) {
         familyStats[fam].completed++;
         if (rec.status === 'WARNING') familyStats[fam].warningCount++;
         if (rec.status === 'ERROR') familyStats[fam].errorCount++;
@@ -87,8 +98,8 @@ export function Tab05Stages({
     }
   }
 
-  const allFamiliesComplete = trial.config.activeFamilies.every(
-    (fam) => familyStats[fam].completed === totalActivePanelsCount && totalActivePanelsCount > 0
+  const allFamiliesComplete = stageActiveFamilies.every(
+    (fam) => (familyStats[fam]?.completed ?? 0) === totalActivePanelsCount && totalActivePanelsCount > 0
   );
 
   const handleSaveHours = () => {
@@ -325,10 +336,23 @@ export function Tab05Stages({
           </h4>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {trial.config.activeFamilies.map((fam) => {
-              const stats = familyStats[fam];
+            {stageActiveFamilies.map((fam) => {
+              const stats = familyStats[fam] || { completed: 0, total: totalActivePanelsCount, warningCount: 0, errorCount: 0 };
               const percent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
               const isComplete = stats.completed === stats.total && stats.total > 0;
+
+              const familyLabel =
+                fam === 'COLOR'
+                  ? '🎨 COULEUR (CIE L*a*b*)'
+                  : fam === 'GLOSS'
+                  ? '✨ BRILLANCE (GU 60°)'
+                  : fam === 'PERSOZ'
+                  ? '⏱️ DURETÉ PERSOZ'
+                  : fam === 'ADHESION'
+                  ? '🏁 ADHÉRENCE AU QUADRILLAGE'
+                  : fam === 'OBSERVATIONS'
+                  ? '🔍 OBSERVATIONS VISUELLES'
+                  : `📊 ${fam}`;
 
               return (
                 <div
@@ -339,13 +363,7 @@ export function Tab05Stages({
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm text-slate-900">
-                          {fam === 'COLOR'
-                            ? '🎨 COULEUR (CIE L*a*b*)'
-                            : fam === 'GLOSS'
-                            ? '✨ BRILLANCE (GU 60°)'
-                            : fam === 'PERSOZ'
-                            ? '⏱️ DURETÉ PERSOZ'
-                            : '🔍 OBSERVATIONS VISUELLES'}
+                          {familyLabel}
                         </span>
                       </div>
                       <span className="text-xs font-bold font-mono text-slate-600">

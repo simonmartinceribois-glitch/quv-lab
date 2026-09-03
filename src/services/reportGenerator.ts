@@ -235,10 +235,11 @@ export function buildScientificReport(
             `  - [${st.stageType}] ${st.name} | Planifié : ${st.scheduledExposureHours} h | Réel : ${st.actualExposureHours !== undefined ? st.actualExposureHours + ' h' : 'Non mesuré'} | Statut : ${st.status}`
         )
         .join('\n'),
-    measurementPlan: `Familles de mesure actives : ${trial.config.activeFamilies.join(', ')}\n• Couleur : ${trial.config.familyConfigs.COLOR?.enabled ? 'Active (4 points normatifs par éprouvette)' : 'Désactivée'}\n• Brillance : ${trial.config.familyConfigs.GLOSS?.enabled ? 'Active (2 points sens du fil + 2 points perpendiculaire)' : 'Désactivée'}\n• Persoz : ${trial.config.familyConfigs.PERSOZ?.enabled ? 'Active (3 mesures d\'amortissement - Labo)' : 'Désactivée'}\n• Observations visuelles : ${trial.config.familyConfigs.OBSERVATIONS?.enabled ? 'Active (Évaluation ISO 4628)' : 'Désactivée'}`,
+    measurementPlan: `Familles de mesure actives : ${trial.config.activeFamilies.join(', ')}\n• Couleur : ${trial.config.familyConfigs.COLOR?.enabled ? 'Active (4 points normatifs par éprouvette)' : 'Désactivée'}\n• Brillance : ${trial.config.familyConfigs.GLOSS?.enabled ? 'Active (2 points sens du fil + 2 points perpendiculaire)' : 'Désactivée'}\n• Persoz : ${trial.config.familyConfigs.PERSOZ?.enabled ? 'Active (3 mesures d\'amortissement - Labo)' : 'Désactivée'}\n• Adhérence au quadrillage : ${trial.config.familyConfigs.ADHESION?.enabled ? 'Active (NF EN ISO 2409:2020 - 6×6 incisions)' : 'Désactivée'}\n• Observations visuelles : ${trial.config.familyConfigs.OBSERVATIONS?.enabled ? 'Active (Évaluation ISO 4628)' : 'Désactivée'}`,
     colorResults: `Les coordonnées trichromatiques CIE L*a*b* et les variations différentielles ΔL*, Δa*, Δb*, ΔE*ab sont issues exclusivement du moteur scientifique QUV-Lab (version ${ruleSet.version}).\nÉtape initiale T0 : Référence absolue pour chaque éprouvette.\nProgression observée : Variation maximale ΔE* enregistrée : ${maxDeltaE.toFixed(2)} sur les éprouvettes évaluées.\nConsulter l'Annexe B pour le détail des valeurs par éprouvette et par lot.`,
     glossResults: `Mesures de réflectance spéculaire sous géométrie 60°.\nÉtape initiale T0 : Niveau de brillance initial caractérisé par éprouvette.\nÉvolution temporelle : Rétention résiduelle minimale de ${minRetention.toFixed(1)} % constatée sur la campagne.\nConsulter l'Annexe B pour les calculs de variation absolue ΔGloss et de taux de rétention résiduelle.`,
     persozResults: `Dureté superficielle par temps d'amortissement du pendule Persoz (secondes).\nNOTE MÉTHODOLOGIQUE : Cette grandeur constitue une recommandation interne du laboratoire (LAB_RECOMMENDATION) et ne constitue pas une exigence normative formelle de la NF EN 927-6.\nÉvolution : Suivi de la cinétique de réticulation / dégradation mécanique superficielle.`,
+    adhesionResults: `Évaluation de la résistance à la séparation par quadrillage selon NF EN ISO 2409:2020.\nNOTE MÉTHODOLOGIQUE : L'essai au quadrillage constitue une méthode d'évaluation qualitative de la résistance du revêtement au détachement selon une grille de 6×6 incisions (classes 0 à 5), et ne doit en aucun cas être assimilé à une force d'adhérence quantitative en MPa.\nProtocole : Éprouvette témoin T à T0 (référence initiale), éprouvettes exposées à C12 (2016 h). Espacement de peigne 2 mm (≤ 120 µm) ou 3 mm (121–250 µm) selon l'épaisseur sèche du revêtement.`,
     visualObservations: `Cotations des défauts surfaciques selon les normes ISO 4628 (Cloquage, Écaillage, Craquelage, Farinage) et ISO 2409 (Quadrillage).\nAucun défaut majeur prématuré n'a entraîné d'arrêt anticipé de l'essai.`,
     kineticsAnalysis: `Analyse cinétique de la dégradation : Les données compilées permettent d'observer les courbes d'évolution temporelle depuis T0 (0 h) jusqu'aux étapes en cours d'exposition (168 h à ${evaluatedStages[evaluatedStages.length - 1]?.scheduledExposureHours || 0} h) et l'étape finale à 2016 h.\nDistinction rigoureuse : La dispersion intra-panneau (répétabilité de la mesure) est isolée de la dispersion inter-panneaux (homogénéité du lot).`,
     qualityControl: `Contrôle qualité des acquisitions : Chaque mesure est qualifiée selon 4 niveaux (GOOD, ACCEPTABLE, WARNING, INVALID).\nToutes les données brutes (RAW) sont préservées dans leur intégralité sans modification ni arrondissement destructif.\nRelevés avec alerte qualité : dûment signalés avec mention explicite dans les tableaux d'annexes.`,
@@ -323,7 +324,7 @@ export function exportReportToCsv(trial: Trial, report: ScientificReport, ruleSe
   trial.stages.forEach((st) => {
     trial.batches.forEach((b) => {
       b.panels.forEach((p) => {
-        ['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'].forEach((fam) => {
+        ['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'].forEach((fam) => {
           const key = `${st.id}__${p.id}__${fam}`;
           const acq = trial.acquisitions[key];
           if (acq && acq.computed) {
@@ -346,6 +347,11 @@ export function exportReportToCsv(trial: Trial, report: ScientificReport, ruleSe
               valStr = comp.meanDampingTime !== null && comp.meanDampingTime !== undefined ? `${comp.meanDampingTime.toFixed(1)} s` : '—';
               stdStr = comp.stdDevDampingTime !== null && comp.stdDevDampingTime !== undefined ? `${comp.stdDevDampingTime.toFixed(2)}` : '—';
               deltaStr = comp.deltaDampingTime !== null && comp.deltaDampingTime !== undefined ? `${comp.deltaDampingTime.toFixed(1)} s` : 'RÉF (T0)';
+            } else if (fam === 'ADHESION') {
+              valStr = comp.adhesionClass !== null && comp.adhesionClass !== undefined ? `Classe ${comp.adhesionClass}` : '—';
+              stdStr = comp.gridSpacingUsedMm ? `Peigne ${comp.gridSpacingUsedMm} mm` : '—';
+              deltaStr = comp.deltaAdhesionClass !== null && comp.deltaAdhesionClass !== undefined ? `ΔClasse=${comp.deltaAdhesionClass >= 0 ? '+' : ''}${comp.deltaAdhesionClass}` : 'RÉF (T0)';
+              retStr = comp.delayCompliance || '—';
             } else if (fam === 'OBSERVATIONS') {
               valStr = comp.summary || 'Aspect conforme';
             }
@@ -384,7 +390,7 @@ export function exportRawDataToCsv(trial: Trial): string {
   trial.stages.forEach((st) => {
     trial.batches.forEach((b) => {
       b.panels.forEach((p) => {
-        ['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'].forEach((fam) => {
+        ['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'].forEach((fam) => {
           const key = `${st.id}__${p.id}__${fam}`;
           const acq = trial.acquisitions[key];
           if (acq && acq.raw) {
@@ -415,6 +421,10 @@ export function exportRawDataToCsv(trial: Trial): string {
                   `"${st.id}";"${st.name}";${st.cycleIndex};"${b.id}";"${b.reference}";"${p.id}";"${p.label}";PERSOZ;${r.pointIndex};${r.dampingTimeSeconds ?? ''};;;;${src};"${op}";"${dt}"`
                 );
               });
+            } else if (fam === 'ADHESION' && raw.adhesionClass !== undefined) {
+              lines.push(
+                `"${st.id}";"${st.name}";${st.cycleIndex};"${b.id}";"${b.reference}";"${p.id}";"${p.label}";ADHESION;"Classe ${raw.adhesionClass ?? ''}";${raw.coatingThicknessMicrons ?? ''};${raw.gridSpacingMm ?? ''};${raw.elapsedTimeHours ?? ''};"${raw.observation || ''}";${src};"${op}";"${dt}"`
+              );
             } else if (fam === 'OBSERVATIONS' && Array.isArray(raw.observations)) {
               raw.observations.forEach((obs: any) => {
                 lines.push(

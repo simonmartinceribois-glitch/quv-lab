@@ -16,6 +16,7 @@ import {
   ScientificRuleSet,
   UUID
 } from '../types/scientific';
+import { getActiveFamiliesForStage } from './panelUtils';
 
 export const QUALITY_ASSESSMENT_VERSION = '1.2.0';
 
@@ -27,6 +28,11 @@ export function assessStageQuality(
   trial: Trial,
   ruleSet: ScientificRuleSet
 ): StageQualityAssessment {
+  const stage = trial.stages.find((s) => s.id === stageId);
+  const scheduledFamilies = stage
+    ? getActiveFamiliesForStage(trial.config.activeFamilies, stage)
+    : trial.config.activeFamilies;
+
   const stageAcquisitions = Object.values(trial.acquisitions).filter((a) => a.stageId === stageId);
   const activePanels = trial.batches.flatMap((b) => b.panels.filter((p) => p.status === 'ACTIVE'));
 
@@ -36,15 +42,15 @@ export function assessStageQuality(
 
   const familyAssessments: Record<string, QualityStatus> = {};
 
-  for (const familyId of trial.config.activeFamilies) {
+  for (const familyId of scheduledFamilies) {
     const familyAcqs = stageAcquisitions.filter((a) => a.familyId === familyId);
     let famHasInvalid = false;
     let famHasWarning = false;
 
     for (const acq of familyAcqs) {
-      if (acq.alerts.some((alert) => alert.severity === 'BLOCKING')) {
+      if (acq.alerts?.some((alert) => alert.severity === 'BLOCKING')) {
         famHasInvalid = true;
-      } else if (acq.alerts.some((alert) => alert.severity === 'WARNING')) {
+      } else if (acq.alerts?.some((alert) => alert.severity === 'WARNING')) {
         famHasWarning = true;
       }
     }
@@ -61,10 +67,10 @@ export function assessStageQuality(
   }
 
   for (const panel of activePanels) {
-    const panelAcqs = stageAcquisitions.filter((a) => a.panelId === panel.id);
-    const hasBlocking = panelAcqs.some((a) => a.alerts.some((al) => al.severity === 'BLOCKING'));
-    const hasWarning = panelAcqs.some((a) => a.alerts.some((al) => al.severity === 'WARNING'));
-    const isComplete = panelAcqs.length === trial.config.activeFamilies.length;
+    const panelAcqs = stageAcquisitions.filter((a) => a.panelId === panel.id && scheduledFamilies.includes(a.familyId));
+    const hasBlocking = panelAcqs.some((a) => a.alerts?.some((al) => al.severity === 'BLOCKING'));
+    const hasWarning = panelAcqs.some((a) => a.alerts?.some((al) => al.severity === 'WARNING'));
+    const isComplete = panelAcqs.length === scheduledFamilies.length;
 
     if (hasBlocking) {
       panelsInvalid++;

@@ -9,8 +9,7 @@ import {
   Trial,
   PanelAcquisitionRecord,
   BatchDefinition,
-  PanelDefinition,
-  MediaReference
+  PanelDefinition
 } from '../../types/trial';
 import {
   MeasurementFamilyId,
@@ -18,19 +17,24 @@ import {
   ColorRawData,
   GlossRawData,
   PersozRawData,
+  AdhesionRawData,
   VisualObservationsRawData,
   VisualObservationItem,
   QualityStatus
 } from '../../types/scientific';
 import { globalTrialStore, generateUUID } from '../../services/trialStore';
 import {
+  ISO2409_CLASSES,
+  getApplicableGridSpacing,
+  calculateDelayCompliance
+} from '../../scientific/adhesionEngine';
+import { isFamilyScheduledForStage, getActiveFamiliesForStage } from '../../scientific/panelUtils';
+import {
   PlayCircle,
   CheckCircle2,
   AlertTriangle,
   ChevronRight,
   ChevronLeft,
-  Camera,
-  Upload,
   Layers,
   Sparkles,
   Save,
@@ -47,6 +51,7 @@ interface Props {
   selectedStageId: string;
   selectedFamilyId: MeasurementFamilyId;
   ruleSet: ScientificRuleSet;
+  onStageChange?: (stageId: string) => void;
   onFamilyChange: (family: MeasurementFamilyId) => void;
   onTrialUpdated: () => void;
 }
@@ -56,11 +61,26 @@ export function Tab06MeasurementsBench({
   selectedStageId,
   selectedFamilyId,
   ruleSet,
+  onStageChange,
   onFamilyChange,
   onTrialUpdated
 }: Props) {
-  const currentStage = trial.stages.find((s) => s.id === selectedStageId) || trial.stages[0];
+  // Jalons de mesurage actifs selon le plan pour la famille sélectionnée (ex: ADHESION = T0 + C12 uniquement)
+  const measuredStages = trial.stages.filter(
+    (s) => s.status !== 'INACTIVE' && isFamilyScheduledForStage(selectedFamilyId, s)
+  );
+  const currentStage =
+    trial.stages.find((s) => s.id === selectedStageId) || measuredStages[0] || trial.stages[0];
   const isInitialStage = currentStage.cycleIndex === 0;
+
+  // Redirection automatique si la famille actuelle n'est pas planifiée au jalon sélectionné (ex: ADHESION sur C1..C11)
+  useEffect(() => {
+    if (!isFamilyScheduledForStage(selectedFamilyId, currentStage)) {
+      const allowedFams = getActiveFamiliesForStage(trial.config.activeFamilies, currentStage);
+      const fallback = allowedFams[0] || 'COLOR';
+      onFamilyChange(fallback);
+    }
+  }, [currentStage.id, selectedFamilyId, trial.config.activeFamilies, onFamilyChange]);
 
   // Liste plate des panneaux actifs
   const activePanelsList = trial.batches.flatMap((b) =>
@@ -72,7 +92,6 @@ export function Tab06MeasurementsBench({
   );
 
   const [operatorId, setOperatorId] = useState<string>('Simon Martin (Technicien)');
-  const [photoCaption, setPhotoCaption] = useState<string>('');
   const [showValidationSummaryModal, setShowValidationSummaryModal] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
@@ -120,6 +139,10 @@ export function Tab06MeasurementsBench({
     { category: 'GENERAL_APPEARANCE', categoryLabel: 'Aspect général', rating: 0, status: 'CONFORME', comment: 'Aspect uniforme' }
   ]);
 
+  // Adhérence au quadrillage : classe (0 à 5) et observation
+  const [adhesionClass, setAdhesionClass] = useState<number | null>(0);
+  const [adhesionObservation, setAdhesionObservation] = useState<string>('');
+
   // Synchronisation lors du changement de panneau ou famille
   useEffect(() => {
     if (!currentPanel) return;
@@ -163,6 +186,15 @@ export function Tab06MeasurementsBench({
         setPersozValues(arr);
       } else {
         setPersozValues(Array.from({ length: persozCount }, () => ''));
+      }
+    } else if (selectedFamilyId === 'ADHESION') {
+      const raw = rec?.raw as AdhesionRawData;
+      if (raw && raw.adhesionClass !== undefined && raw.adhesionClass !== null) {
+        setAdhesionClass(raw.adhesionClass);
+        setAdhesionObservation(raw.observation || '');
+      } else {
+        setAdhesionClass(0);
+        setAdhesionObservation('');
       }
     } else if (selectedFamilyId === 'OBSERVATIONS') {
       const raw = rec?.raw as VisualObservationsRawData;
@@ -216,6 +248,21 @@ export function Tab06MeasurementsBench({
         unit: 'SECONDS',
         instrumentMetadata: { temperatureCelsius: 21.5, relativeHumidityPercent: 50 }
       } as PersozRawData;
+    } else if (selectedFamilyId === 'ADHESION') {
+      const spacingInfo = getApplicableGridSpacing(currentBatch.dryFilmThicknessMicrons);
+      if (currentBatch.dryFilmThicknessMicrons === undefined || currentBatch.dryFilmThicknessMicrons === null || currentBatch.dryFilmThicknessMicrons > 250) {
+        return;
+      }
+      rawPayload = {
+        adhesionClass: adhesionClass !== null ? adhesionClass : 0,
+        gridSpacingMm: spacingInfo.gridSpacingMm || 2,
+        coatingThicknessMicrons: currentBatch.dryFilmThicknessMicrons,
+        measurementDateTime: new Date().toISOString(),
+        applicationDateTime: currentBatch.applicationDate,
+        requiredMinimumDelayHours: 168,
+        normReference: 'NF EN ISO 2409:2020',
+        observation: adhesionObservation.trim() || undefined
+      } as AdhesionRawData;
     } else if (selectedFamilyId === 'OBSERVATIONS') {
       rawPayload = {
         observations,
@@ -276,24 +323,6 @@ export function Tab06MeasurementsBench({
     }
   };
 
-  // Association de photo
-  const handleAttachPhoto = () => {
-    if (!currentPanel) return;
-    const filename = `photo-${currentPanel.label}-${currentStage.cycleIndex}-${Date.now()}.jpg`;
-    globalTrialStore.attachPhoto({
-      trialId: trial.id,
-      panelId: currentPanel.id,
-      stageId: currentStage.id,
-      filename,
-      caption: photoCaption || `Éprouvette ${currentPanel.label} à l'étape ${currentStage.name}`,
-      operatorId
-    });
-    setPhotoCaption('');
-    setSaveSuccessMsg('Photographie légendée associée');
-    setTimeout(() => setSaveSuccessMsg(null), 2000);
-    onTrialUpdated();
-  };
-
   const computed = currentRecord?.computed as any;
 
   // Calcul du résumé de la campagne pour la famille
@@ -306,14 +335,14 @@ export function Tab06MeasurementsBench({
   const totalPanelsCount = activePanelsList.length;
   const isFamilyCampaignComplete = completedPanelsCount === totalPanelsCount && totalPanelsCount > 0;
 
-  const currentStageIndex = trial.stages.findIndex((s) => s.id === currentStage.id);
-  const stageStepNumber = currentStageIndex >= 0 ? currentStageIndex + 1 : currentStage.cycleIndex + 1;
-  const totalStagesCount = trial.stages.length || 13;
+  const currentMeasuredIndex = measuredStages.findIndex((s) => s.id === currentStage.id);
+  const stageStepNumber = currentMeasuredIndex >= 0 ? currentMeasuredIndex + 1 : 1;
+  const totalStagesCount = measuredStages.length;
 
   const stageHoursDisplay =
     currentStage.cycleIndex === 0
-      ? 'T0 — 0 h'
-      : `${currentStage.scheduledExposureHours} h`;
+      ? 'T0 (0 h)'
+      : `C${currentStage.cycleIndex} (${currentStage.scheduledExposureHours} h)`;
 
   const stageActionLabel =
     currentStage.stageType === 'INITIAL_PRE_EXPOSURE'
@@ -329,7 +358,7 @@ export function Tab06MeasurementsBench({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[11px] font-mono font-bold tracking-wider uppercase">
-              ÉTAPE {stageStepNumber} / {totalStagesCount}
+              JALON {stageStepNumber} / {totalStagesCount}
             </span>
             <span className="text-sm font-bold text-white font-mono">{stageHoursDisplay}</span>
             <span className="text-xs font-bold text-amber-300 uppercase tracking-wide">
@@ -342,10 +371,12 @@ export function Tab06MeasurementsBench({
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-          {(['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => {
+          {(['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => {
             const isSelected = selectedFamilyId === fam;
             const isEnabled = trial.config.activeFamilies.includes(fam);
             if (!isEnabled) return null;
+            // Règle canonique : ADHESION = T0 et C12 uniquement. À C1..C11, le bouton ne doit simplement pas être rendu.
+            if (!isFamilyScheduledForStage(fam, currentStage)) return null;
 
             return (
               <button
@@ -364,11 +395,56 @@ export function Tab06MeasurementsBench({
                     ? '✨ Brillance'
                     : fam === 'PERSOZ'
                     ? '⏱️ Persoz'
+                    : fam === 'ADHESION'
+                    ? '✂️ Adhérence'
                     : '🔍 Observations'}
                 </span>
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* 1b. BANDEAU DE SÉLECTION DU JALON DE MESURAGE DU PLAN */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 overflow-x-auto w-full">
+          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+            Jalons planifiés :
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            {measuredStages.map((st) => {
+              const isSelected = st.id === currentStage.id;
+              const label = st.cycleIndex === 0 ? 'T0' : `C${st.cycleIndex}`;
+              const hoursLabel = st.cycleIndex === 0 ? '0 h' : `${st.scheduledExposureHours} h`;
+
+              // Complétude de ce jalon pour la famille active
+              const isCompleted = activePanelsList.length > 0 && activePanelsList.every((item) => {
+                const k = `${st.id}__${item.panel.id}__${selectedFamilyId}`;
+                return trial.acquisitions[k]?.computed !== null && trial.acquisitions[k]?.computed !== undefined;
+              });
+
+              return (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => onStageChange && onStageChange(st.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-400'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span className={`text-[10px] font-mono ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                    ({hoursLabel})
+                  </span>
+                  {isCompleted && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" title="Saisie complète" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -639,6 +715,189 @@ export function Tab06MeasurementsBench({
               </div>
             )}
 
+            {/* --- ADHÉRENCE — ESSAI AU QUADRILLAGE (NF EN ISO 2409:2020) --- */}
+            {selectedFamilyId === 'ADHESION' && (() => {
+              const thickness = currentBatch?.dryFilmThicknessMicrons;
+              const spacingResult = getApplicableGridSpacing(thickness);
+              const delayResult = calculateDelayCompliance(currentBatch?.applicationDate, new Date().toISOString(), 168);
+              const isWitness = currentPanel?.role === 'WITNESS' || currentPanel?.index === 1;
+
+              return (
+                <div className="space-y-4">
+                  {/* 1. Cadre de préparation et traçabilité ISO 2409 (Section 7) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sliders className="w-4 h-4 text-indigo-600" />
+                        Paramètres Préparatoires du Quadrillage — NF EN ISO 2409:2020
+                      </span>
+                      <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-md">
+                        Évaluation qualitative de séparation
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                        <div className="text-slate-500 text-[11px]">Lot & Subjectile :</div>
+                        <div className="font-bold text-slate-900 mt-0.5">
+                          {currentBatch?.reference} ({currentBatch?.woodSpecies || 'Bois'})
+                        </div>
+                      </div>
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                        <div className="text-slate-500 text-[11px]">Épaisseur sèche (ISO 2808) :</div>
+                        <div className={`font-bold mt-0.5 ${thickness !== undefined && thickness <= 250 ? 'text-indigo-900' : 'text-rose-600'}`}>
+                          {thickness !== undefined ? `${thickness} µm` : '⚠️ Non renseignée'}
+                        </div>
+                      </div>
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                        <div className="text-slate-500 text-[11px]">Espacement requis du peigne :</div>
+                        <div className={`font-bold mt-0.5 ${thickness !== undefined && thickness <= 250 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {thickness !== undefined && thickness <= 250 ? `${spacingResult.gridSpacingMm} mm (6×6 incisions)` : '🔴 Bloqué'}
+                        </div>
+                      </div>
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
+                        <div className="text-slate-500 text-[11px]">Conditionnement avant essai :</div>
+                        <div className="font-bold text-slate-800 mt-0.5">23 ± 2 °C / 50 ± 5 % HR (≥ 16 h)</div>
+                      </div>
+                    </div>
+
+                    {/* Traçabilité du délai d'application */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg gap-2">
+                      <div>
+                        <span className="text-slate-500 font-medium">Application finition : </span>
+                        <span className="font-mono font-bold text-slate-800">{currentBatch?.applicationDate || 'Non renseignée'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 font-medium">Délai écoulé : </span>
+                        {delayResult.elapsedTimeHours !== null ? (
+                          <span className={`font-bold ${delayResult.status === 'CONFORME' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {Math.floor(delayResult.elapsedTimeHours / 24)} j {Math.round(delayResult.elapsedTimeHours % 24)} h ({delayResult.status === 'CONFORME' ? '✅ Conforme ≥ 168 h' : '⚠️ < 168 h'})
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Date d'application manquante</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ségrégation T0 / Exposition */}
+                    {isInitialStage ? (
+                      <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Étape T0 (Initial) :</strong> Mesure de référence réalisée sur l'éprouvette Témoin <strong>{currentBatch?.reference}-T</strong>. Cette donnée brute initiale est sanctuarisée et ne sera jamais écrasée par les mesures d'exposition.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Étape d'Exposition ({currentStage.name}) :</strong> Évaluation de la résistance à la séparation après vieillissement accéléré sur éprouvette exposée <strong>{currentBatch?.reference}-{currentPanel?.label}</strong>.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Garde-fous normatifs */}
+                  {thickness === undefined && (
+                    <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-900 space-y-2">
+                      <div className="font-bold flex items-center gap-2 text-sm text-rose-800">
+                        <AlertTriangle className="w-5 h-5 text-rose-600" />
+                        Donnée manquante — Épaisseur sèche du revêtement requise
+                      </div>
+                      <p>
+                        Conformément à la NF EN ISO 2409:2020, l'espacement du peigne de quadrillage dépend strictement de l'épaisseur du film sec (≤ 60 µm : 1 mm sur subjectile dur ou 2 mm sur bois ; 61–120 µm : 2 mm ; 121–250 µm : 3 mm).
+                      </p>
+                      <p className="font-bold">
+                        La saisie du résultat d'adhérence est bloquée tant que l'épaisseur sèche du lot n'est pas renseignée dans l'onglet Lots & Éprouvettes.
+                      </p>
+                    </div>
+                  )}
+
+                  {thickness !== undefined && thickness > 250 && (
+                    <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-900 space-y-2">
+                      <div className="font-bold flex items-center gap-2 text-sm text-rose-800">
+                        <AlertTriangle className="w-5 h-5 text-rose-600" />
+                        🔴 Méthode non appropriée (Épaisseur {thickness} µm &gt; 250 µm)
+                      </div>
+                      <p>
+                        La NF EN ISO 2409:2020 spécifie formellement que l'essai de quadrillage ne s'applique pas aux revêtements dont l'épaisseur totale est supérieure à 250 µm.
+                      </p>
+                      <p className="font-bold">
+                        La saisie est bloquée conformément au domaine d'application de la norme.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 3. Sélecteur interactif des Classes de Quadrillage ISO 2409 */}
+                  {thickness !== undefined && thickness <= 250 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          Classification visuelle du quadrillage (ISO 2409:2020)
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          Espacement retenu : <strong>{spacingResult.gridSpacingMm} mm</strong>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {Object.values(ISO2409_CLASSES).map((cls) => {
+                          const isSelected = adhesionClass === cls.rating;
+                          return (
+                            <button
+                              key={cls.rating}
+                              type="button"
+                              onClick={() => setAdhesionClass(cls.rating)}
+                              className={`p-3 rounded-xl border text-left transition-all ${
+                                isSelected
+                                    ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-400 shadow-xs'
+                                    : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
+                                  cls.rating === 0
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : cls.rating === 1
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : cls.rating === 2
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : cls.rating === 3
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}>
+                                  Classe {cls.rating}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-500">
+                                  Détachement : {cls.affectedAreaPercent}
+                                </span>
+                              </div>
+                              <div className="text-xs font-semibold text-slate-800 mb-1">{cls.shortLabel}</div>
+                              <p className="text-[11px] text-slate-600 line-clamp-3 leading-relaxed">{cls.description}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Observations de l'opérateur */}
+                      <div className="pt-2">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Observations spécifiques sur le quadrillage (facultatif) :
+                        </label>
+                        <input
+                          type="text"
+                          value={adhesionObservation}
+                          onChange={(e) => setAdhesionObservation(e.target.value)}
+                          placeholder="Ex : Rupture cohésive dans le bois, détachement net sur fil du bois, petits éclats aux croisillons..."
+                          className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* --- OBSERVATIONS --- */}
             {selectedFamilyId === 'OBSERVATIONS' && (
               <div className="space-y-4">
@@ -706,31 +965,6 @@ export function Tab06MeasurementsBench({
                 </div>
               </div>
             )}
-
-            {/* Photographie & Légende */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Camera className="w-4 h-4 text-blue-600" />
-                Associer une Photographie Légendée
-              </span>
-              <div className="flex flex-col sm:flex-row items-center gap-2">
-                <input
-                  type="text"
-                  value={photoCaption}
-                  onChange={(e) => setPhotoCaption(e.target.value)}
-                  placeholder="Légende (ex: Micro-fissures visibles au niveau du joint de colle)"
-                  className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={handleAttachPhoto}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold flex items-center gap-1 whitespace-nowrap"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Associer Photo
-                </button>
-              </div>
-            </div>
 
             {/* Actions de validation du panneau */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
@@ -908,6 +1142,54 @@ export function Tab06MeasurementsBench({
                     </>
                   )}
 
+                  {/* ADHESION */}
+                  {selectedFamilyId === 'ADHESION' && (
+                    <>
+                      <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-950 uppercase tracking-wider">Classe d'Adhérence :</span>
+                          <span className="px-2.5 py-0.5 bg-indigo-600 text-white font-bold rounded-lg text-sm">
+                            Classe {computed.adhesionClass ?? '—'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-indigo-900 italic leading-relaxed">{computed.classDescription}</p>
+                      </div>
+
+                      <div className="flex justify-between p-2 bg-slate-50 rounded-lg text-xs">
+                        <span className="text-slate-600">Peigne de quadrillage :</span>
+                        <strong>{computed.gridSpacingUsedMm ? `${computed.gridSpacingUsedMm} mm (6×6)` : '—'}</strong>
+                      </div>
+
+                      <div className="flex justify-between p-2 bg-slate-50 rounded-lg text-xs">
+                        <span className="text-slate-600">Délai d'application :</span>
+                        <strong>{computed.elapsedTimeHours !== undefined && computed.elapsedTimeHours !== null ? `${computed.elapsedTimeHours} h` : '—'}</strong>
+                      </div>
+
+                      {!isInitialStage && computed.witnessT0AdhesionClass !== undefined && (
+                        <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-950 space-y-1">
+                          <div className="flex justify-between font-bold">
+                            <span>Évolution vs T0 :</span>
+                            <span>
+                              {computed.deltaAdhesionClass !== null && computed.deltaAdhesionClass !== undefined
+                                ? (computed.deltaAdhesionClass >= 0 ? `+${computed.deltaAdhesionClass}` : `${computed.deltaAdhesionClass}`)
+                                : '—'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-blue-700">
+                            (Classe {computed.adhesionClass} actuelle vs Classe {computed.witnessT0AdhesionClass} à T0 sur témoin)
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-relaxed">
+                        <strong>Rappel normatif NF EN ISO 2409:2020 :</strong>
+                        <p className="mt-0.5">
+                          L'essai au quadrillage est une méthode empirique d'évaluation de la résistance à la séparation. Ne jamais convertir en contrainte d'adhérence en MPa ni en conformité automatique.
+                        </p>
+                      </div>
+                    </>
+                  )}
+
                   {/* OBSERVATIONS */}
                   {selectedFamilyId === 'OBSERVATIONS' && (
                     <>
@@ -992,7 +1274,7 @@ export function Tab06MeasurementsBench({
                     type="button"
                     onClick={() => {
                       setShowValidationSummaryModal(false);
-                      const fams: MeasurementFamilyId[] = ['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'];
+                      const fams = getActiveFamiliesForStage(trial.config.activeFamilies, currentStage);
                       const curIdx = fams.indexOf(selectedFamilyId);
                       if (curIdx < fams.length - 1) {
                         onFamilyChange(fams[curIdx + 1]);

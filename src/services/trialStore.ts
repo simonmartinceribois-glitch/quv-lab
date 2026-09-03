@@ -15,6 +15,7 @@ import {
   PanelAcquisitionRecord,
   AuditEvent,
   MediaReference,
+  PhotoReference,
   TrialProtocolConfig,
   WoodGrainOrientation,
   ExposureFace,
@@ -28,6 +29,7 @@ import {
   ColorRawData,
   GlossRawData,
   PersozRawData,
+  AdhesionRawData,
   VisualObservationsRawData,
   ScientificRuleOrigin,
   ScientificReport,
@@ -38,6 +40,7 @@ import { getDefaultScientificRuleSet, createCountConfiguration, createSeriesConf
 import { recalculateAcquisition } from '../scientific/recalculator';
 import { createConfigChangeEvent } from '../scientific/auditEngine';
 import { buildScientificReport } from './reportGenerator';
+import { isFamilyScheduledForStage } from '../scientific/panelUtils';
 
 const STORAGE_KEY = 'quv_lab_trials_v2_2';
 
@@ -53,13 +56,115 @@ export function generateUUID(): UUID {
 }
 
 /**
- * Génère les 13 étapes d'exposition standard NF EN 927-6 (T0 + 12 cycles de 168h)
+ * Erreur spécifique de violation d'intégrité relationnelle du modèle QUV (Gate 3.1)
  */
-export function generateStandardExposureStages(trialId: UUID): ExposureStage[] {
+export class IntegrityViolationError extends Error {
+  public readonly code = 'INTEGRITY_VIOLATION';
+  public readonly details?: Record<string, unknown>;
+
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message);
+    this.name = 'IntegrityViolationError';
+    this.details = details;
+    Object.setPrototypeOf(this, IntegrityViolationError.prototype);
+  }
+}
+
+/**
+ * Garde-fou d'intégrité relationnelle pour les acquisitions (Gate 3.1 - Risque 1)
+ * Vérifie que batchId existe, que panelId appartient bien à ce lot,
+ * et que stageId appartient bien à l'essai, avant toute écriture.
+ */
+export function validateAcquisitionTarget(
+  trial: Trial,
+  stageId: UUID,
+  batchId: UUID,
+  panelId: UUID
+): void {
+  if (!trial) {
+    throw new IntegrityViolationError("Essai indéfini lors de la validation de la cible d'acquisition.");
+  }
+
+  // 1. Vérification de l'existence du lot
+  const batch = trial.batches?.find((b) => b.id === batchId);
+  if (!batch) {
+    throw new IntegrityViolationError(
+      `Le lot ${batchId} n'existe pas dans l'essai ${trial.id}.`,
+      { trialId: trial.id, batchId, stageId, panelId }
+    );
+  }
+
+  // 2. Vérification de l'appartenance de l'éprouvette au lot
+  const panel = batch.panels?.find((p) => p.id === panelId);
+  if (!panel) {
+    throw new IntegrityViolationError(
+      `L'éprouvette ${panelId} n'appartient pas au lot ${batchId} (lot "${batch.reference}").`,
+      { trialId: trial.id, batchId, panelId, stageId }
+    );
+  }
+
+  // 3. Vérification de l'existence de l'étape dans l'essai
+  const stage = trial.stages?.find((s) => s.id === stageId);
+  if (!stage) {
+    throw new IntegrityViolationError(
+      `L'étape d'exposition ${stageId} n'appartient pas à l'essai ${trial.id}.`,
+      { trialId: trial.id, stageId, batchId, panelId }
+    );
+  }
+}
+
+/**
+ * Garde-fou d'intégrité relationnelle pour les photographies (Gate 3.1 - Risque 2)
+ * Vérifie que stageId appartient à l'essai et que panelId appartient à un lot de l'essai.
+ */
+export function validatePhotoTarget(
+  trial: Trial,
+  stageId: UUID,
+  panelId: UUID
+): void {
+  if (!trial) {
+    throw new IntegrityViolationError("Essai indéfini lors de la validation de la cible photographique.");
+  }
+
+  // 1. Vérification de l'existence de l'étape
+  const stage = trial.stages?.find((s) => s.id === stageId);
+  if (!stage) {
+    throw new IntegrityViolationError(
+      `L'étape d'exposition ${stageId} n'appartient pas à l'essai ${trial.id}.`,
+      { trialId: trial.id, stageId, panelId }
+    );
+  }
+
+  // 2. Vérification de l'existence de l'éprouvette dans l'un des lots de l'essai
+  let foundPanel = false;
+  if (Array.isArray(trial.batches)) {
+    for (const b of trial.batches) {
+      if (b.panels?.some((p) => p.id === panelId)) {
+        foundPanel = true;
+        break;
+      }
+    }
+  }
+
+  if (!foundPanel) {
+    throw new IntegrityViolationError(
+      `L'éprouvette ${panelId} n'existe pas dans les lots de l'essai ${trial.id}.`,
+      { trialId: trial.id, stageId, panelId }
+    );
+  }
+}
+
+/**
+ * Génère les 13 étapes d'exposition standard NF EN 927-6 (T0 + 12 cycles de 168h)
+ * Si un plan de mesurage restreint est fourni, les cycles non mesurés restent présents
+ * dans le modèle physique en tant que cycles d'exposition, avec le statut 'INACTIVE' (masqués de la paillasse).
+ * T0 et C12 sont obligatoires et ne peuvent jamais être inactifs.
+ */
+export function generateStandardExposureStages(trialId: UUID, selectedMeasurementCycles?: number[]): ExposureStage[] {
   const stages: ExposureStage[] = [];
   const baseDate = new Date('2026-08-30T08:00:00Z');
 
-  // Étape initiale T0 (0 h) — MESURES INITIALES AVANT EXPOSITION
+  // Étape initiale T0 (0 h) — MESURES INITIALES AVANT EXPOSITION (Obligatoire)
   stages.push({
     id: `stage-${trialId}-0`,
     trialId,
@@ -82,6 +187,11 @@ export function generateStandardExposureStages(trialId: UUID): ExposureStage[] {
     const scheduledDate = new Date(baseDate.getTime() + i * 7 * 24 * 3600 * 1000);
     const isFinal = i === 12;
 
+    // Détermination de l'inclusion dans le plan de mesurage
+    // Par défaut (si non spécifié), tous les cycles sont mesurés.
+    // T0 (0) et C12 (12) sont toujours inclus.
+    const isPlannedForMeasurement = selectedMeasurementCycles ? (isFinal || selectedMeasurementCycles.includes(i)) : true;
+
     stages.push({
       id: `stage-${trialId}-${i}`,
       trialId,
@@ -91,13 +201,13 @@ export function generateStandardExposureStages(trialId: UUID): ExposureStage[] {
         ? '2016 h — MESURES FINALES APRÈS EXPOSITION'
         : `${cycleHours} h — MESURES EN COURS D'EXPOSITION`,
       scheduledExposureHours: cycleHours,
-      actualExposureHours: i === 1 ? 168 : i === 2 ? 335.8 : undefined,
+      actualExposureHours: i === 1 && isPlannedForMeasurement ? 168 : (i === 2 && isPlannedForMeasurement ? 335.8 : undefined),
       scheduledAt: scheduledDate.toISOString(),
-      measuredAt: i === 1 ? '2026-09-06T14:30:00Z' : i === 2 ? '2026-09-13T10:15:00Z' : undefined,
-      status: i === 1 ? 'VALIDATED' : i === 2 ? 'IN_PROGRESS' : 'NOT_STARTED',
-      validatedBy: i === 1 ? 'SM' : undefined,
-      validatedAt: i === 1 ? '2026-09-06T17:00:00Z' : undefined,
-      notes: i === 1 ? 'Relevé intermédiaire 168h validé sans anomalie.' : undefined
+      measuredAt: i === 1 && isPlannedForMeasurement ? '2026-09-06T14:30:00Z' : (i === 2 && isPlannedForMeasurement ? '2026-09-13T10:15:00Z' : undefined),
+      status: !isPlannedForMeasurement ? 'INACTIVE' : (i === 1 ? 'VALIDATED' : i === 2 ? 'IN_PROGRESS' : 'NOT_STARTED'),
+      validatedBy: i === 1 && isPlannedForMeasurement ? 'SM' : undefined,
+      validatedAt: i === 1 && isPlannedForMeasurement ? '2026-09-06T17:00:00Z' : undefined,
+      notes: i === 1 && isPlannedForMeasurement ? 'Relevé intermédiaire 168h validé sans anomalie.' : undefined
     });
   }
 
@@ -153,6 +263,11 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       applicationConditions: '21°C, 55% HR',
       applicationDate: '2026-08-20',
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
+      dryFilmThicknessMicrons: 55,
+      dryFilmThicknessUnit: 'µm',
+      dryFilmThicknessMeasurementDate: '2026-08-21',
+      dryFilmThicknessOperator: 'SM',
+      dryFilmThicknessMethod: 'Peigne de jauge ISO 2808',
       batchNotes: 'Lot témoin sans agent anti-UV renforcé',
       panels: [
         { id: `panel-${trialId}-1-1`, batchId: `batch-${trialId}-1`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
@@ -176,6 +291,11 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       applicationConditions: '21°C, 55% HR',
       applicationDate: '2026-08-20',
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
+      dryFilmThicknessMicrons: 95,
+      dryFilmThicknessUnit: 'µm',
+      dryFilmThicknessMeasurementDate: '2026-08-21',
+      dryFilmThicknessOperator: 'SM',
+      dryFilmThicknessMethod: 'Peigne de jauge ISO 2808',
       batchNotes: 'Formulation avec stabilisants lumière HALS',
       panels: [
         { id: `panel-${trialId}-2-1`, batchId: `batch-${trialId}-2`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
@@ -199,6 +319,11 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
       applicationConditions: '21°C, 55% HR',
       applicationDate: '2026-08-20',
       dryingOrConditioningTime: '7 jours à 20°C/65% HR',
+      dryFilmThicknessMicrons: 185,
+      dryFilmThicknessUnit: 'µm',
+      dryFilmThicknessMeasurementDate: '2026-08-21',
+      dryFilmThicknessOperator: 'SM',
+      dryFilmThicknessMethod: 'Peigne de jauge ISO 2808',
       batchNotes: 'Formulation nano-charges minérales absorbantes',
       panels: [
         { id: `panel-${trialId}-3-1`, batchId: `batch-${trialId}-3`, index: 1, label: 'T', role: 'WITNESS', roleCode: 'T', grainOrientation: 'Quartier', status: 'ACTIVE' },
@@ -211,7 +336,7 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
 
   const protocolConfig: TrialProtocolConfig = {
     standardReference: 'NF EN 927-6',
-    activeFamilies: ['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'],
+    activeFamilies: ['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'],
     familyConfigs: {
       COLOR: {
         familyId: 'COLOR',
@@ -227,6 +352,10 @@ function createDemoTrial(ruleSet: ScientificRuleSet): Trial {
         familyId: 'PERSOZ',
         enabled: true,
         countConfig: createCountConfiguration('PERSOZ', 3, ruleSet)
+      },
+      ADHESION: {
+        familyId: 'ADHESION',
+        enabled: true
       },
       OBSERVATIONS: {
         familyId: 'OBSERVATIONS',
@@ -449,6 +578,22 @@ function seedDemoAcquisitions(trial: Trial, ruleSet: ScientificRuleSet): void {
       };
       recordAcquisitionDirect(trial, stageT0.id, batch.id, panel.id, 'OBSERVATIONS', obsRawT0, ruleSet);
 
+      // Adhérence au quadrillage T0 (ISO 2409:2020 - Témoin T)
+      if (panel.role === 'WITNESS' || panel.index === 1) {
+        const spacing = (batch.dryFilmThicknessMicrons && batch.dryFilmThicknessMicrons > 120) ? 3 : 2;
+        const adhRawT0: AdhesionRawData = {
+          adhesionClass: 0,
+          gridSpacingMm: spacing,
+          coatingThicknessMicrons: batch.dryFilmThicknessMicrons,
+          measurementDateTime: '2026-08-30T14:00:00Z',
+          applicationDateTime: batch.applicationDate,
+          requiredMinimumDelayHours: 168,
+          normReference: 'NF EN ISO 2409:2020',
+          observation: 'Quadrillage net 6×6, bords des incisions parfaitement lisses, aucun détachement (Classe 0).'
+        };
+        recordAcquisitionDirect(trial, stageT0.id, batch.id, panel.id, 'ADHESION', adhRawT0, ruleSet);
+      }
+
       // --- 168h ---
       const dL168 = batch.reference === 'LOT XX1C' ? 1.8 : batch.reference === 'LOT XX2C' ? 0.9 : 0.6;
       const dG168 = batch.reference === 'LOT XX1C' ? -4.5 : batch.reference === 'LOT XX2C' ? -2.2 : -1.5;
@@ -546,6 +691,87 @@ function seedDemoAcquisitions(trial: Trial, ruleSet: ScientificRuleSet): void {
         };
         recordAcquisitionDirect(trial, stage336.id, batch.id, panel.id, 'GLOSS', glossRaw336, ruleSet);
       }
+    }
+  }
+
+  // Seeding de photographies documentaires de démo (T0, 168h, 336h)
+  const panelSample = trial.batches[0]?.panels[1]; // XX1C-1
+  const stage0 = trial.stages[0]; // T0
+  const stage1 = trial.stages[1]; // 168h
+  const stage2 = trial.stages[2]; // 336h
+
+  if (panelSample && stage0 && stage1) {
+    const makeSvg = (label: string, hours: number, stageName: string, stateText: string, colorHue: string) =>
+      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${colorHue}"/><stop offset="100%" stop-color="%2378350f"/></linearGradient><pattern id="wood" width="40" height="10" patternUnits="userSpaceOnUse"><path d="M 0 5 Q 20 0 40 5" stroke="%23ffffff" stroke-width="0.5" stroke-opacity="0.15" fill="none"/></pattern></defs><rect width="600" height="400" fill="url(%23bg)"/><rect width="600" height="400" fill="url(%23wood)"/><rect x="20" y="20" width="560" height="360" rx="16" fill="none" stroke="%23ffffff" stroke-width="1.5" stroke-opacity="0.3"/><circle cx="50" cy="50" r="14" fill="%23ffffff" fill-opacity="0.2"/><text x="50" y="55" font-family="sans-serif" font-size="12" font-weight="bold" fill="%23ffffff" text-anchor="middle">📷</text><text x="80" y="55" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23ffffff">${label} — ${hours} h (${stageName})</text><rect x="40" y="290" width="520" height="70" rx="10" fill="%230f172a" fill-opacity="0.75"/><text x="60" y="318" font-family="sans-serif" font-size="13" font-weight="bold" fill="%23f8fafc">Suivi documentaire : ${stateText}</text><text x="60" y="342" font-family="monospace" font-size="11" fill="%2394a3b8">NF EN 927-6 • Éprouvette Pin sylvestre • QUV-Lab France</text></svg>`;
+
+    trial.mediaReferences.push({
+      id: 'photo-demo-01',
+      trialId: trial.id,
+      panelId: panelSample.id,
+      stageId: stage0.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeSvg('LOT XX1C - Éprouvette 1', 0, 'T0', 'État initial homogène, brillant intact, surface saine', '%23b45309'),
+      filename: 'PHOTO_LOT_XX1C_1_T0_0h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 245000,
+      capturedAt: '2026-09-01T08:30:00Z',
+      capturedBy: 'Simon Martin (Technicien)',
+      caption: 'État initial avant exposition : film lasure satiné homogène, aucun défaut de surface.'
+    });
+
+    trial.mediaReferences.push({
+      id: 'photo-demo-02',
+      trialId: trial.id,
+      panelId: panelSample.id,
+      stageId: stage1.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeSvg('LOT XX1C - Éprouvette 1', 168, 'Cycle 1 (168 h)', 'Légère perte de brillance superficielle, couleur stable', '%2392400e'),
+      filename: 'PHOTO_LOT_XX1C_1_C1_168h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 252000,
+      capturedAt: '2026-09-08T09:15:00Z',
+      capturedBy: 'Simon Martin (Technicien)',
+      caption: 'Après 1 cycle (168 h) : début de matification de la zone supérieure, absence de cloquage.'
+    });
+
+    if (stage2) {
+      trial.mediaReferences.push({
+        id: 'photo-demo-03',
+        trialId: trial.id,
+        panelId: panelSample.id,
+        stageId: stage2.id,
+        type: 'PHOTO',
+        status: 'ACTIVE',
+        storageKey: makeSvg('LOT XX1C - Éprouvette 1', 336, 'Cycle 2 (336 h)', 'Matification accentuée, film adhérent, micro-relief visible', '%2378350f'),
+        filename: 'PHOTO_LOT_XX1C_1_C2_336h.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 260000,
+        capturedAt: '2026-09-15T10:00:00Z',
+        capturedBy: 'Simon Martin (Technicien)',
+        caption: 'Après 2 cycles (336 h) : évolution continue de l\'aspect de surface, conservation de l\'intégrité.'
+      });
+    }
+
+    // Photo pour le témoin T à T0
+    const witnessSample = trial.batches[0]?.panels[0];
+    if (witnessSample) {
+      trial.mediaReferences.push({
+        id: 'photo-demo-t0-witness',
+        trialId: trial.id,
+        panelId: witnessSample.id,
+        stageId: stage0.id,
+        type: 'PHOTO',
+        status: 'ACTIVE',
+        storageKey: makeSvg('LOT XX1C - Témoin T', 0, 'T0', 'Éprouvette témoin de référence non exposée', '%231e293b'),
+        filename: 'PHOTO_LOT_XX1C_T_T0.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 238000,
+        capturedAt: '2026-09-01T08:20:00Z',
+        capturedBy: 'Simon Martin (Technicien)',
+        caption: 'Éprouvette témoin T conservée en chambre obscure conditionnée (20°C / 65% HR).'
+      });
     }
   }
 }
@@ -871,7 +1097,115 @@ export function createValidationTrial(ruleSet: ScientificRuleSet): Trial {
       assessedBy: 'SM'
     };
     recordAcquisitionDirect(trial, stage2016.id, batch.id, panel.id, 'OBSERVATIONS', obsRaw2016, ruleSet);
+
+    // Adhérence au quadrillage C12 (2016 h - Éprouvettes exposées)
+    if (panel.role !== 'WITNESS' && panel.index !== 1) {
+      const spacing = (batch.dryFilmThicknessMicrons && batch.dryFilmThicknessMicrons > 120) ? 3 : 2;
+      const adhClass = batch.reference === 'LOT XX1C' ? 1 : 0;
+      const adhRaw2016: AdhesionRawData = {
+        adhesionClass: adhClass,
+        gridSpacingMm: spacing,
+        coatingThicknessMicrons: batch.dryFilmThicknessMicrons,
+        measurementDateTime: '2026-11-25T15:30:00Z',
+        applicationDateTime: batch.applicationDate,
+        requiredMinimumDelayHours: 168,
+        normReference: 'NF EN ISO 2409:2020',
+        observation: adhClass === 0
+          ? 'Bords des incisions lisses après 2016 h d\'exposition, aucun détachement.'
+          : 'Légers détachements en petits éclats au niveau des intersections des incisions (< 5 % de la surface).'
+      };
+      recordAcquisitionDirect(trial, stage2016.id, batch.id, panel.id, 'ADHESION', adhRaw2016, ruleSet);
+    }
   }
+
+  // Planche photographique chronologique d'exemple (T0, C3/504h, C6/1008h, C9/1512h, C12/2016h)
+  const p1 = batch.panels[1]; // LOT A - 1 (E1)
+  const st0 = stages[0]; // T0 - 0h
+  const st3 = stages[3]; // C3 - 504h
+  const st6 = stages[6]; // C6 - 1008h
+  const st9 = stages[9]; // C9 - 1512h
+  const st12 = stages[12]; // C12 - 2016h
+
+  const makeValSvg = (hours: number, stageLabel: string, desc: string, gradStart: string) =>
+    `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><defs><linearGradient id="valbg${hours}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${gradStart}"/><stop offset="100%" stop-color="%23451a03"/></linearGradient><pattern id="woodpat" width="50" height="12" patternUnits="userSpaceOnUse"><path d="M 0 6 Q 25 0 50 6" stroke="%23ffffff" stroke-width="0.6" stroke-opacity="0.18" fill="none"/></pattern></defs><rect width="600" height="400" fill="url(%23valbg${hours})"/><rect width="600" height="400" fill="url(%23woodpat)"/><rect x="20" y="20" width="560" height="360" rx="14" fill="none" stroke="%23ffffff" stroke-width="1.5" stroke-opacity="0.35"/><rect x="35" y="35" width="220" height="32" rx="8" fill="%230f172a" fill-opacity="0.85"/><text x="45" y="56" font-family="monospace" font-size="13" font-weight="bold" fill="%2338bdf8">LOT A - Échantillon 1</text><rect x="400" y="35" width="165" height="32" rx="8" fill="%231e293b" fill-opacity="0.85"/><text x="482" y="56" font-family="monospace" font-size="13" font-weight="bold" fill="%23fbbf24" text-anchor="middle">${stageLabel} — ${hours} h</text><rect x="35" y="295" width="530" height="70" rx="10" fill="%23020617" fill-opacity="0.8"/><text x="50" y="322" font-family="sans-serif" font-size="13" font-weight="bold" fill="%23f8fafc">${desc}</text><text x="50" y="346" font-family="monospace" font-size="11" fill="%2394a3b8">NF EN 927-6 (Cycle A) • Pinus sylvestris • QUV-Lab Métrologie</text></svg>`;
+
+  trial.mediaReferences.push(
+    {
+      id: 'photo-val-00',
+      trialId: trial.id,
+      panelId: p1.id,
+      stageId: st0.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeValSvg(0, 'T0', 'État initial : film satiné translucide sans défaut', '%23d97706'),
+      filename: 'PHOTO_LOTA_1_T0_0h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 248000,
+      capturedAt: '2026-03-01T08:00:00Z',
+      capturedBy: 'Dr. S. Martin (Responsable Labo)',
+      caption: 'T0 (0 h) : Aspect initial sain et homogène. Aucun signe de farinage, cloquage ou craquelage.'
+    },
+    {
+      id: 'photo-val-03',
+      trialId: trial.id,
+      panelId: p1.id,
+      stageId: st3.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeValSvg(504, 'C3', 'Après 504 h : début de matification, teinte stable', '%23b45309'),
+      filename: 'PHOTO_LOTA_1_C3_504h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 254000,
+      capturedAt: '2026-03-22T09:30:00Z',
+      capturedBy: 'Dr. S. Martin (Responsable Labo)',
+      caption: 'C3 (504 h) : Perte de brillance modérée, très légère modification colorimétrique, excellente tenue.'
+    },
+    {
+      id: 'photo-val-06',
+      trialId: trial.id,
+      panelId: p1.id,
+      stageId: st6.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeValSvg(1008, 'C6', 'Après 1008 h : matification progressive, film continu', '%2392400e'),
+      filename: 'PHOTO_LOTA_1_C6_1008h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 259000,
+      capturedAt: '2026-04-12T11:00:00Z',
+      capturedBy: 'Dr. S. Martin (Responsable Labo)',
+      caption: 'C6 (1008 h) : Matification homogène constatée, structure du bois visible sans décollement.'
+    },
+    {
+      id: 'photo-val-09',
+      trialId: trial.id,
+      panelId: p1.id,
+      stageId: st9.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeValSvg(1512, 'C9', 'Après 1512 h : matification prononcée, intégrité préservée', '%2378350f'),
+      filename: 'PHOTO_LOTA_1_C9_1512h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 263000,
+      capturedAt: '2026-05-03T14:15:00Z',
+      capturedBy: 'Dr. S. Martin (Responsable Labo)',
+      caption: 'C9 (1512 h) : Aspect mat régulier, aucune fissuration ni dégradation locale.'
+    },
+    {
+      id: 'photo-val-12',
+      trialId: trial.id,
+      panelId: p1.id,
+      stageId: st12.id,
+      type: 'PHOTO',
+      status: 'ACTIVE',
+      storageKey: makeValSvg(2016, 'C12', 'Après 2016 h : terme d\'exposition, aspect mat sans altération grave', '%23581c87'),
+      filename: 'PHOTO_LOTA_1_C12_2016h.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 271000,
+      capturedAt: '2026-05-24T16:00:00Z',
+      capturedBy: 'Dr. S. Martin (Responsable Labo)',
+      caption: 'C12 (2016 h) : Terme de l\'essai. Dégradation limitée à la perte de brillance normale sans rupture du film.'
+    }
+  );
 
   return trial;
 }
@@ -885,6 +1219,9 @@ function recordAcquisitionDirect(
   raw: unknown,
   ruleSet: ScientificRuleSet
 ): PanelAcquisitionRecord {
+  // Garde-fou d'intégrité relationnelle (Gate 3.1 - Risque 1)
+  validateAcquisitionTarget(trial, stageId, batchId, panelId);
+
   const key = `${stageId}__${panelId}__${familyId}`;
   const record: PanelAcquisitionRecord = {
     id: `acq-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -1043,7 +1380,6 @@ export class TrialStoreService {
     const trial = this.trials.get(id);
     if (trial) {
       if (!trial.auditTrail) trial.auditTrail = [];
-      if (!trial.auditEvents) trial.auditEvents = [];
       if (!trial.mediaReferences) trial.mediaReferences = [];
       if (!trial.acquisitions) trial.acquisitions = {};
       if (!trial.reports) trial.reports = [];
@@ -1058,7 +1394,6 @@ export class TrialStoreService {
   public saveTrial(trial: Trial): void {
     trial.updatedAt = new Date().toISOString();
     if (!trial.auditTrail) trial.auditTrail = [];
-    if (!trial.auditEvents) trial.auditEvents = [];
     if (!trial.mediaReferences) trial.mediaReferences = [];
     if (!trial.acquisitions) trial.acquisitions = {};
     if (!trial.reports) trial.reports = [];
@@ -1097,6 +1432,7 @@ export class TrialStoreService {
     }[];
     activeFamilies: MeasurementFamilyId[];
     familyConfigs?: Partial<TrialProtocolConfig['familyConfigs']>;
+    selectedMeasurementCycles?: number[];
   }): Trial {
     const trialId = generateUUID();
     const now = new Date().toISOString();
@@ -1187,6 +1523,10 @@ export class TrialStoreService {
           enabled: params.activeFamilies.includes('PERSOZ'),
           countConfig: createCountConfiguration('PERSOZ', 3, this.ruleSet)
         },
+        ADHESION: params.familyConfigs?.ADHESION || {
+          familyId: 'ADHESION',
+          enabled: params.activeFamilies.includes('ADHESION')
+        },
         OBSERVATIONS: params.familyConfigs?.OBSERVATIONS || {
           familyId: 'OBSERVATIONS',
           enabled: params.activeFamilies.includes('OBSERVATIONS')
@@ -1194,7 +1534,7 @@ export class TrialStoreService {
       }
     };
 
-    const stages = generateStandardExposureStages(trialId);
+    const stages = generateStandardExposureStages(trialId, params.selectedMeasurementCycles);
 
     const auditTrail: AuditEvent[] = [
       {
@@ -1209,7 +1549,8 @@ export class TrialStoreService {
           reference: params.metadata.reference,
           title: params.metadata.title,
           batchCount: createdBatches.length,
-          totalPanels: createdBatches.reduce((sum, b) => sum + b.panels.length, 0)
+          totalPanels: createdBatches.reduce((sum, b) => sum + b.panels.length, 0),
+          measurementPlanCycles: params.selectedMeasurementCycles || [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         }
       }
     ];
@@ -1379,6 +1720,17 @@ export class TrialStoreService {
     const trial = this.getTrial(params.trialId);
     if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
 
+    // Garde-fou d'intégrité relationnelle (Gate 3.1 - Risque 1) avant tout effet de bord
+    validateAcquisitionTarget(trial, params.stageId, params.batchId, params.panelId);
+
+    // Règle métier canonique : ADHESION = T0 + C12 uniquement. Interdit à C1..C11.
+    const targetStage = trial.stages?.find((s) => s.id === params.stageId);
+    if (params.familyId === 'ADHESION' && targetStage && !isFamilyScheduledForStage('ADHESION', targetStage)) {
+      throw new Error(
+        `La mesure d'adhérence au quadrillage (NF EN ISO 2409) est strictement interdite aux étapes intermédiaires (C1 à C11). Elle est planifiée uniquement à T0 et C12.`
+      );
+    }
+
     const now = new Date().toISOString();
 
     // Verrouillage automatique si non encore verrouillé
@@ -1546,9 +1898,18 @@ export class TrialStoreService {
 
     const now = new Date().toISOString();
     if (!trial.auditTrail) trial.auditTrail = [];
-    if (!trial.auditEvents) trial.auditEvents = [];
 
     if (!active) {
+      // Protection stricte : Un jalon contenant déjà des acquisitions scientifiques ne peut pas être désactivé rétroactivement
+      const hasAcquisitions = Object.values(trial.acquisitions || {}).some(
+        (acq) => acq && acq.stageId === stageId && (acq.raw !== undefined || acq.status === 'COMPLETE' || acq.status === 'VALID' as any)
+      );
+      if (hasAcquisitions) {
+        throw new Error(
+          `Impossible de désactiver le jalon "${stage.name}" car des acquisitions scientifiques y sont déjà consignées.`
+        );
+      }
+
       stage.status = 'INACTIVE';
       trial.auditTrail.push({
         id: generateUUID(),
@@ -1588,60 +1949,126 @@ export class TrialStoreService {
   }
 
   /**
+   * Met à jour le plan de mesurage d'un essai avant la première acquisition (Gate 52).
+   * Après la première acquisition scientifique ou si la configuration est verrouillée :
+   * PLAN VERROUILLÉ, toute modification est interdite pour garantir l'intégrité de l'historique.
+   */
+  public updateMeasurementPlan(
+    trialId: UUID,
+    activeCycleIndices: number[],
+    operatorId: string,
+    reason?: string
+  ): Trial {
+    const trial = this.getTrial(trialId);
+    if (!trial) throw new Error(`Essai ${trialId} introuvable`);
+
+    if (trial.configurationStatus === 'LOCKED') {
+      throw new Error(
+        "Le plan de mesurage est verrouillé. Aucune modification n'est autorisée après le démarrage ou le verrouillage de la campagne."
+      );
+    }
+
+    const hasAcquisitions = Object.keys(trial.acquisitions).length > 0;
+    if (hasAcquisitions) {
+      throw new Error(
+        "Impossible de modifier le plan de mesurage : des acquisitions scientifiques ont déjà été enregistrées."
+      );
+    }
+
+    // T0 (0) et C12 (12) sont obligatoires
+    const normalizedPlan = Array.from(new Set([0, 12, ...activeCycleIndices]));
+
+    trial.stages.forEach((stage) => {
+      if (stage.cycleIndex === 0 || stage.cycleIndex === 12) {
+        if (stage.status === 'INACTIVE') stage.status = 'NOT_STARTED';
+        return;
+      }
+
+      const shouldBeActive = normalizedPlan.includes(stage.cycleIndex);
+      if (shouldBeActive && stage.status === 'INACTIVE') {
+        stage.status = 'NOT_STARTED';
+      } else if (!shouldBeActive && stage.status !== 'INACTIVE') {
+        stage.status = 'INACTIVE';
+      }
+    });
+
+    const now = new Date().toISOString();
+    if (!trial.auditTrail) trial.auditTrail = [];
+
+    trial.auditTrail.push({
+      id: generateUUID(),
+      trialId,
+      timestamp: now,
+      operatorId: operatorId || 'OPERATOR',
+      action: 'UPDATE_MEASUREMENT_PLAN' as any,
+      entityType: 'TRIAL',
+      entityId: trialId,
+      details: {
+        activeCycles: normalizedPlan.sort((a, b) => a - b),
+        reason: reason || 'Mise à jour du plan de mesurage pré-acquisition'
+      }
+    });
+
+    this.saveTrial(trial);
+    return trial;
+  }
+
+  /**
    * Associe une photographie en garantissant l'unicité stricte du cliché actif par (panelId + stageId).
    * Si une photo existe déjà, elle est automatiquement archivée de façon non-destructive.
    */
   public attachPhoto(params: {
-   trialId: UUID;
-   panelId?: UUID;
-   stageId?: UUID;
-   filename: string;
-   caption?: string;
-   operatorId: string;
-   storageKey?: string;
-   replaceExisting?: boolean;
+    trialId: UUID;
+    panelId: UUID;
+    stageId: UUID;
+    filename: string;
+    caption?: string;
+    operatorId: string;
+    storageKey?: string;
+    replaceExisting?: boolean;
   }): Trial {
-   const trial = this.getTrial(params.trialId);
-   if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
+    const trial = this.getTrial(params.trialId);
+    if (!trial) throw new Error(`Essai ${params.trialId} introuvable`);
 
-   const now = new Date().toISOString();
-   let replacedMediaId: string | undefined;
+    // Garde-fou d'intégrité relationnelle (Gate 3.1 - Risque 2)
+    validatePhotoTarget(trial, params.stageId, params.panelId);
 
-   // Vérifier si une photo active existe déjà pour ce couple (panelId, stageId)
-   if (params.panelId && params.stageId) {
-     const existingActivePhoto = trial.mediaReferences.find(
-       (m) =>
-         m.type === 'PHOTO' &&
-         m.status !== 'ARCHIVED' &&
-         m.panelId === params.panelId &&
-         m.stageId === params.stageId
-     );
+    const now = new Date().toISOString();
+    let replacedMediaId: string | undefined;
 
-     if (existingActivePhoto) {
-       // Archivage automatique et non destructif de l'ancienne photo dans l'historique
-       existingActivePhoto.status = 'ARCHIVED';
-       existingActivePhoto.replacedAt = now;
-       existingActivePhoto.replacedBy = params.operatorId || 'OPERATOR';
-       replacedMediaId = existingActivePhoto.id;
+    // Vérifier si une photo active existe déjà pour ce couple (panelId, stageId)
+    const existingActivePhoto = trial.mediaReferences.find(
+      (m) =>
+        m.type === 'PHOTO' &&
+        m.status !== 'ARCHIVED' &&
+        m.panelId === params.panelId &&
+        m.stageId === params.stageId
+    );
 
-       trial.auditTrail.push({
-         id: generateUUID(),
-         trialId: params.trialId,
-         timestamp: now,
-         operatorId: params.operatorId || 'OPERATOR',
-         action: 'REPLACE_PHOTO',
-         entityType: 'PANEL',
-         entityId: params.panelId,
-         details: {
-           oldMediaId: existingActivePhoto.id,
-           stageId: params.stageId,
-           reason: 'Remplacement de photographie active par un nouveau cliché'
-         }
-       });
-     }
-   }
+    if (existingActivePhoto) {
+      // Archivage automatique et non destructif de l'ancienne photo dans l'historique
+      existingActivePhoto.status = 'ARCHIVED';
+      existingActivePhoto.replacedAt = now;
+      existingActivePhoto.replacedBy = params.operatorId || 'OPERATOR';
+      replacedMediaId = existingActivePhoto.id;
 
-    const media: MediaReference = {
+      trial.auditTrail.push({
+        id: generateUUID(),
+        trialId: params.trialId,
+        timestamp: now,
+        operatorId: params.operatorId || 'OPERATOR',
+        action: 'REPLACE_PHOTO',
+        entityType: 'PANEL',
+        entityId: params.panelId,
+        details: {
+          oldMediaId: existingActivePhoto.id,
+          stageId: params.stageId,
+          reason: 'Remplacement de photographie active par un nouveau cliché'
+        }
+      });
+    }
+
+    const media: PhotoReference = {
       id: generateUUID(),
       trialId: params.trialId,
       panelId: params.panelId,
@@ -1667,16 +2094,14 @@ export class TrialStoreService {
 
     trial.mediaReferences.push(media);
 
-    if (params.panelId && params.stageId) {
-      // Trouver l'acquisition observation s'il y a lieu
-      const obsKey = `${params.stageId}__${params.panelId}__OBSERVATIONS`;
-      const obsRec = trial.acquisitions[obsKey];
-      if (obsRec) {
-        if (replacedMediaId) {
-          obsRec.mediaIds = obsRec.mediaIds.filter((id) => id !== replacedMediaId);
-        }
-        obsRec.mediaIds = [...obsRec.mediaIds, media.id];
+    // Trouver l'acquisition observation s'il y a lieu
+    const obsKey = `${params.stageId}__${params.panelId}__OBSERVATIONS`;
+    const obsRec = trial.acquisitions[obsKey];
+    if (obsRec) {
+      if (replacedMediaId) {
+        obsRec.mediaIds = obsRec.mediaIds.filter((id) => id !== replacedMediaId);
       }
+      obsRec.mediaIds = [...obsRec.mediaIds, media.id];
     }
 
     trial.auditTrail.push({
@@ -1686,7 +2111,7 @@ export class TrialStoreService {
       operatorId: params.operatorId || 'OPERATOR',
       action: 'ATTACH_PHOTO',
       entityType: 'PANEL',
-      entityId: params.panelId || params.trialId,
+      entityId: params.panelId,
       details: {
         mediaId: media.id,
         stageId: params.stageId,

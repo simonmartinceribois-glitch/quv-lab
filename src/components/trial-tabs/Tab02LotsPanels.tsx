@@ -56,9 +56,18 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
   const [newBatchConditions, setNewBatchConditions] = useState('21°C, 55% HR');
   const [newBatchDate, setNewBatchDate] = useState(new Date().toISOString().slice(0, 10));
   const [newBatchDrying, setNewBatchDrying] = useState('7 jours à 20°C/65% HR');
+  const [newBatchThickness, setNewBatchThickness] = useState<number | undefined>(60);
   const [newBatchNotes, setNewBatchNotes] = useState('');
 
   const isLocked = trial.configurationStatus === 'LOCKED';
+
+  const handleUpdateBatchThickness = (batchId: string, thickness: number | undefined) => {
+    const batch = trial.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    batch.dryFilmThicknessMicrons = thickness;
+    globalTrialStore.saveTrial(trial);
+    onTrialUpdated();
+  };
 
   const handleUpdateSpecimenGrain = (batchId: string, panelId: string, orientation: WoodGrainOrientation) => {
     const batch = trial.batches.find((b) => b.id === batchId);
@@ -175,6 +184,8 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
       applicationConditions: newBatchConditions.trim() || undefined,
       applicationDate: newBatchDate,
       dryingOrConditioningTime: newBatchDrying.trim() || undefined,
+      dryFilmThicknessMicrons: newBatchThickness ? Number(newBatchThickness) : undefined,
+      dryFilmThicknessUnit: 'µm',
       batchNotes: newBatchNotes.trim() || undefined,
       panels
     };
@@ -323,7 +334,7 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
               </div>
 
               {/* Paramètres du LOT (Essence, Produit, Système) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Essence (Bois)</span>
                   <span className="font-semibold text-slate-800">{batch.woodSpecies || '—'}</span>
@@ -339,6 +350,12 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
                   </span>
                 </div>
                 <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Épaisseur sèche (ISO 2808)</span>
+                  <span className={`font-semibold ${batch.dryFilmThicknessMicrons ? 'text-indigo-900 font-mono font-bold' : 'text-slate-400 italic'}`}>
+                    {batch.dryFilmThicknessMicrons ? `${batch.dryFilmThicknessMicrons} µm` : 'Non renseignée'}
+                  </span>
+                </div>
+                <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">Fabricant & Méthode</span>
                   <span className="font-semibold text-slate-800">
                     {batch.manufacturerOrSupplier || '—'} {batch.applicationMethod ? `• ${batch.applicationMethod}` : ''}
@@ -347,13 +364,66 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
               </div>
 
               {/* ÉCHANTILLONS DU LOT (T, 1, 2, 3) */}
-              <div>
-                <h5 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex items-center justify-between">
-                  <span>Éprouvettes du Lot ({batch.reference})</span>
-                  <span className="text-[11px] font-normal normal-case text-slate-400">
-                    1 Témoin (T) + 3 Exposées (1, 2, 3) selon NF EN 927-6
-                  </span>
-                </h5>
+              <div className="space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                    <span>Éprouvettes du Lot ({batch.reference})</span>
+                    <span className="text-[11px] font-normal normal-case text-slate-400">
+                      1 Témoin (T) + 3 Exposées (1, 2, 3) selon NF EN 927-6
+                    </span>
+                  </h5>
+
+                  {/* Ligne / contrôle d'épaisseur sèche associée au lot */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs">
+                    <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                      Épaisseur sèche du film (µm) :
+                    </span>
+                    {isLocked ? (
+                      <span className={`font-mono font-bold ${batch.dryFilmThicknessMicrons ? 'text-indigo-900' : 'text-slate-400 italic'}`}>
+                        {batch.dryFilmThicknessMicrons ? `${batch.dryFilmThicknessMicrons} µm` : 'Non renseignée'}
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          placeholder="ex: 60"
+                          value={batch.dryFilmThicknessMicrons ?? ''}
+                          onChange={(e) =>
+                            handleUpdateBatchThickness(
+                              batch.id,
+                              e.target.value !== '' ? Number(e.target.value) : undefined
+                            )
+                          }
+                          className="w-20 px-2 py-0.5 bg-white border border-indigo-300 rounded-lg text-xs font-mono font-bold text-indigo-900 text-center focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                        />
+                        <span className="font-mono text-indigo-800 font-semibold text-[11px]">µm</span>
+                        {batch.dryFilmThicknessMicrons ? (
+                          <span
+                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                              batch.dryFilmThicknessMicrons <= 60
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : batch.dryFilmThicknessMicrons <= 120
+                                ? 'bg-blue-100 text-blue-800'
+                                : batch.dryFilmThicknessMicrons <= 250
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                            title="Espacement requis pour essai quadrillage ISO 2409"
+                          >
+                            Peigne {batch.dryFilmThicknessMicrons <= 120 ? '2 mm' : batch.dryFilmThicknessMicrons <= 250 ? '3 mm' : '>250 µm'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded font-medium">
+                            Requis pour ISO 2409
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {batch.panels.map((panel, pIdx) => {
@@ -619,6 +689,19 @@ export function Tab02LotsPanels({ trial, onTrialUpdated }: Props) {
                   onChange={(e) => setNewBatchProduct(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg"
                   placeholder="Ex: LAS-04"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Épaisseur sèche du film (µm)
+                </label>
+                <input
+                  type="number"
+                  value={newBatchThickness || ''}
+                  onChange={(e) => setNewBatchThickness(e.target.value ? Number(e.target.value) : undefined)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  placeholder="Ex: 60"
                 />
               </div>
 

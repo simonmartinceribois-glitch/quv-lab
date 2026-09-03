@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Trial, PanelDefinition, BatchDefinition } from '../../types/trial';
 import { ScientificRuleSet, MeasurementFamilyId } from '../../types/scientific';
+import { isFamilyScheduledForStage } from '../../scientific/panelUtils';
 import {
   Square,
   Sparkles,
@@ -151,7 +152,7 @@ export function ResultsPanelAnalysisView({
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-slate-600">Famille de mesure :</span>
         <div className="flex rounded-xl bg-white p-1 border border-slate-200 shadow-xs">
-          {(['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => (
+          {(['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => (
             <button
               key={fam}
               type="button"
@@ -168,6 +169,8 @@ export function ResultsPanelAnalysisView({
                 ? 'Brillance'
                 : fam === 'PERSOZ'
                 ? 'Persoz'
+                : fam === 'ADHESION'
+                ? 'Adhérence'
                 : 'Observations'}
             </button>
           ))}
@@ -218,6 +221,15 @@ export function ResultsPanelAnalysisView({
                       <th className="p-2.5 bg-amber-50 text-amber-950">ΔDureté (s)</th>
                     </>
                   )}
+                  {selectedFamily === 'ADHESION' && (
+                    <>
+                      <th className="p-2.5">Classe Quadrillage (0-5)</th>
+                      <th className="p-2.5">Espacement Peigne</th>
+                      <th className="p-2.5">Délai Application</th>
+                      <th className="p-2.5 bg-indigo-50 text-indigo-950">ΔClasse vs T0</th>
+                      <th className="p-2.5">Description Normalisée</th>
+                    </>
+                  )}
                   {selectedFamily === 'OBSERVATIONS' && (
                     <>
                       <th className="p-2.5">Observations Globales</th>
@@ -229,7 +241,13 @@ export function ResultsPanelAnalysisView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {trial.stages.map((stage) => {
+                {trial.stages
+                  .filter(
+                    (stage) =>
+                      isFamilyScheduledForStage(selectedFamily, stage) ||
+                      Boolean(trial.acquisitions[`${stage.id}__${activePanel.id}__${selectedFamily}`]?.raw)
+                  )
+                  .map((stage) => {
                   const key = `${stage.id}__${activePanel.id}__${selectedFamily}`;
                   const acq = trial.acquisitions[key];
                   const comp = acq?.computed as any;
@@ -317,6 +335,24 @@ export function ResultsPanelAnalysisView({
                               ? `${comp.deltaDampingTime > 0 ? '+' : ''}${comp.deltaDampingTime.toFixed(1)} s`
                               : 'RÉF'}
                           </td>
+                        </>
+                      )}
+
+                      {selectedFamily === 'ADHESION' && (
+                        <>
+                          <td className="p-2.5 font-mono text-slate-900 font-bold">
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold">
+                              Classe {comp?.adhesionClass ?? '—'}
+                            </span>
+                          </td>
+                          <td className="p-2.5 font-mono text-slate-600">{comp?.gridSpacingUsedMm ? `${comp.gridSpacingUsedMm} mm` : '—'}</td>
+                          <td className="p-2.5 font-mono text-slate-600">{comp?.elapsedTimeHours ? `${comp.elapsedTimeHours} h` : '—'}</td>
+                          <td className="p-2.5 font-mono text-indigo-950 font-bold bg-indigo-50/40">
+                            {comp?.deltaAdhesionClass !== null && comp?.deltaAdhesionClass !== undefined
+                              ? `${comp.deltaAdhesionClass > 0 ? '+' : ''}${comp.deltaAdhesionClass}`
+                              : 'RÉF'}
+                          </td>
+                          <td className="p-2.5 text-xs text-slate-700">{comp?.classDescription || '—'}</td>
                         </>
                       )}
 

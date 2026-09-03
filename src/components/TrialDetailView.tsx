@@ -166,6 +166,7 @@ export function TrialDetailView({
               setSelectedStageId(stId);
               onSelectTab('05');
             }}
+            onTrialUpdated={onTrialUpdated}
           />
         )}
         {activeTab === '05' && (
@@ -183,6 +184,7 @@ export function TrialDetailView({
             selectedStageId={selectedStageId}
             selectedFamilyId={selectedFamilyId}
             ruleSet={ruleSet}
+            onStageChange={setSelectedStageId}
             onFamilyChange={setSelectedFamilyId}
             onTrialUpdated={onTrialUpdated}
           />

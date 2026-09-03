@@ -169,6 +169,14 @@ export interface BatchDefinition {
   applicationConditions?: string;    // ex: "21°C, 55% HR"
   applicationDate?: string;          // ex: "2026-08-15"
   dryingOrConditioningTime?: string; // ex: "7 jours à 23°C/50% HR"
+  // Épaisseur sèche du revêtement (NF EN ISO 2409 / Référentiel)
+  dryFilmThicknessMicrons?: number | null; // ex: 185
+  dryFilmThicknessUnit?: 'µm' | 'um';
+  dryFilmThicknessMeasurementDate?: string;
+  dryFilmThicknessOperator?: string;
+  dryFilmThicknessMethod?: string; // ex: "Peigne de jauge", "Magnétique ISO 2808", "Micrométrique"
+  dryFilmThicknessDeterminationsCount?: number;
+  dryFilmThicknessNotes?: string;
   batchNotes?: string;
   panels: PanelDefinition[];         // Exactement 4 éprouvettes (T, E1, E2, E3)
 }
@@ -213,12 +221,9 @@ export interface PanelAcquisitionRecord<TRaw = unknown, TComputed = unknown> {
 
 export type MediaStatus = 'ACTIVE' | 'ARCHIVED';
 
-export interface MediaReference {
+export interface BaseMediaReference {
   id: UUID;
   trialId: UUID;
-  panelId?: UUID;
-  stageId?: UUID;
-  type: 'PHOTO' | 'DOCUMENT';
   status?: MediaStatus; // 'ACTIVE' | 'ARCHIVED' (par défaut ACTIVE)
   storageKey: string;
   filename: string;
@@ -231,6 +236,20 @@ export interface MediaReference {
   replacedBy?: string;
   replacementMediaId?: UUID;
 }
+
+export interface PhotoReference extends BaseMediaReference {
+  type: 'PHOTO';
+  panelId: UUID;
+  stageId: UUID;
+}
+
+export interface DocumentReference extends BaseMediaReference {
+  type: 'DOCUMENT';
+  panelId?: UUID;
+  stageId?: UUID;
+}
+
+export type MediaReference = PhotoReference | DocumentReference;
 
 export interface AuditEvent {
   id: UUID;

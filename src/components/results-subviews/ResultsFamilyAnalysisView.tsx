@@ -107,6 +107,21 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
             persozList.reduce((a, b) => a + b, 0) / persozList.length
           ).toFixed(1);
         }
+      } else if (activeFamily === 'ADHESION') {
+        const adhList: number[] = [];
+        activePanels.forEach((p) => {
+          const key = `${stage.id}__${p.id}__ADHESION`;
+          const acq = trial.acquisitions[key];
+          if (acq?.computed) {
+            const aVal = (acq.computed as any).adhesionClass;
+            if (typeof aVal === 'number') adhList.push(aVal);
+          }
+        });
+        if (adhList.length > 0) {
+          point[`${batch.reference} (Classe)`] = +(
+            adhList.reduce((a, b) => a + b, 0) / adhList.length
+          ).toFixed(1);
+        }
       }
     });
 
@@ -128,7 +143,7 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
         </div>
 
         <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-          {(['COLOR', 'GLOSS', 'PERSOZ', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => (
+          {(['COLOR', 'GLOSS', 'PERSOZ', 'ADHESION', 'OBSERVATIONS'] as MeasurementFamilyId[]).map((fam) => (
             <button
               key={fam}
               type="button"
@@ -145,6 +160,8 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
                 ? 'Brillance (60°)'
                 : fam === 'PERSOZ'
                 ? 'Persoz (Dureté)'
+                : fam === 'ADHESION'
+                ? 'Adhérence (ISO 2409)'
                 : 'Observations (ISO)'}
             </button>
           ))}
@@ -188,7 +205,9 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
                         ? 'ΔE*ab (ISO 7724)'
                         : activeFamily === 'GLOSS'
                         ? 'Rétention (%) / GU'
-                        : 'Damping Time (s)',
+                        : activeFamily === 'PERSOZ'
+                        ? 'Damping Time (s)'
+                        : 'Classe Quadrillage (0 à 5)',
                     angle: -90,
                     position: 'insideLeft',
                     fontSize: 11,
@@ -247,6 +266,17 @@ export function ResultsFamilyAnalysisView({ trial, ruleSet }: Props) {
                         key={batch.id}
                         type="monotone"
                         dataKey={`${batch.reference} (Dureté s)`}
+                        stroke={strokeColor}
+                        strokeWidth={2.5}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                      />
+                    );
+                  } else if (activeFamily === 'ADHESION') {
+                    return (
+                      <Line
+                        key={batch.id}
+                        type="monotone"
+                        dataKey={`${batch.reference} (Classe)`}
                         stroke={strokeColor}
                         strokeWidth={2.5}
                         dot={{ r: 4, strokeWidth: 2 }}

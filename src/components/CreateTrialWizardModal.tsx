@@ -100,8 +100,28 @@ export function CreateTrialWizardModal({
   const [commonProtocolNotes, setCommonProtocolNotes] = useState<string>('Éprouvettes usinées sans nœud ni défaut selon prescriptions de la norme.');
 
   // ==========================================
-  // ÉTAPE 3 : Création des lots
+  // ÉTAPE 6 : Plan de mesurage & Calendrier
   // ==========================================
+  const [selectedMeasurementCycles, setSelectedMeasurementCycles] = useState<number[]>([
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+  ]);
+
+  const toggleCycleMeasurement = (cycleIndex: number) => {
+    if (cycleIndex === 0 || cycleIndex === 12) return; // T0 et C12 obligatoires
+    setSelectedMeasurementCycles((prev) =>
+      prev.includes(cycleIndex) ? prev.filter((c) => c !== cycleIndex) : [...prev, cycleIndex].sort((a, b) => a - b)
+    );
+  };
+
+  const setPlanPreset = (preset: 'FULL' | 'QUARTERLY' | 'LIGHT') => {
+    if (preset === 'FULL') {
+      setSelectedMeasurementCycles([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    } else if (preset === 'QUARTERLY') {
+      setSelectedMeasurementCycles([0, 3, 6, 9, 12]);
+    } else if (preset === 'LIGHT') {
+      setSelectedMeasurementCycles([0, 6, 12]);
+    }
+  };
   const [batches, setBatches] = useState<LotFormItem[]>([
     {
       id: '1',
@@ -160,6 +180,7 @@ export function CreateTrialWizardModal({
     'COLOR',
     'GLOSS',
     'PERSOZ',
+    'ADHESION',
     'OBSERVATIONS'
   ]);
 
@@ -294,8 +315,10 @@ export function CreateTrialWizardModal({
         COLOR: { familyId: 'COLOR', enabled: activeFamilies.includes('COLOR'), countConfig: colorConfig },
         GLOSS: { familyId: 'GLOSS', enabled: activeFamilies.includes('GLOSS'), seriesConfig: glossConfig },
         PERSOZ: { familyId: 'PERSOZ', enabled: activeFamilies.includes('PERSOZ'), countConfig: persozConfig },
+        ADHESION: { familyId: 'ADHESION', enabled: activeFamilies.includes('ADHESION') },
         OBSERVATIONS: { familyId: 'OBSERVATIONS', enabled: activeFamilies.includes('OBSERVATIONS') }
-      }
+      },
+      selectedMeasurementCycles
     });
 
     if (onCreated) onCreated(createdTrial.id);
@@ -873,6 +896,13 @@ export function CreateTrialWizardModal({
                     badge: 'Recommandation Laboratoire'
                   },
                   {
+                    id: 'ADHESION' as MeasurementFamilyId,
+                    name: 'Adhérence au Quadrillage',
+                    norme: 'NF EN ISO 2409:2020',
+                    status: 'NORMATIVE_REQUIREMENT',
+                    badge: 'Méthode Qualitative'
+                  },
+                  {
                     id: 'OBSERVATIONS' as MeasurementFamilyId,
                     name: 'Observations Visuelles ISO',
                     norme: 'ISO 4628 (1 à 6) & ISO 2409',
@@ -1052,18 +1082,58 @@ export function CreateTrialWizardModal({
           )}
 
           {/* ============================================================ */}
-          {/* STEP 6 : Calendrier de l'essai                              */}
+          {/* STEP 6 : Calendrier de l'essai & Plan de mesurage           */}
           {/* ============================================================ */}
           {step === 6 && (
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 flex items-start gap-3">
-                <Calendar className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold">Calendrier d'Exposition UV (NF EN 927-6)</p>
-                  <p>
-                    13 étapes d'exposition programmées : 1 étape initiale avant exposition (T0) et 12 cycles hebdomadaires de 168 h (168 h à 2016 h).
-                  </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <Calendar className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Calendrier d'Exposition UV & Plan de Mesurage (NF EN 927-6)</p>
+                    <p className="mt-0.5 text-slate-700">
+                      Les 12 cycles physiques de 168 h (C1 à C12) sont toujours conservés. Sélectionnez ci-dessous les jalons où des campagnes de mesures scientifiques seront effectivement réalisées.
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              {/* Présélections rapides de plan de mesurage */}
+              <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
+                <span className="text-xs font-bold text-slate-600 mr-1">Préréglages :</span>
+                <button
+                  type="button"
+                  onClick={() => setPlanPreset('FULL')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    selectedMeasurementCycles.length === 13
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Standard Complet (T0 + C1 à C12)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlanPreset('QUARTERLY')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    selectedMeasurementCycles.length === 5 && selectedMeasurementCycles.includes(3) && selectedMeasurementCycles.includes(6)
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Jalons Clés / Trimestriels (T0, C3, C6, C9, C12)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlanPreset('LIGHT')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                    selectedMeasurementCycles.length === 3 && selectedMeasurementCycles.includes(6)
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Protocole Allégé (T0, C6, C12)
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-96 overflow-y-auto pr-1">
@@ -1072,38 +1142,66 @@ export function CreateTrialWizardModal({
                   ...Array.from({ length: 11 }, (_, i) => ({
                     cycle: i + 1,
                     hours: (i + 1) * 168,
-                    label: `${(i + 1) * 168} h — MESURES EN COURS D'EXPOSITION`,
+                    label: `C${i + 1} (${(i + 1) * 168} h) — MESURES EN COURS D'EXPOSITION`,
                     type: 'INTERMEDIATE'
                   })),
-                  { cycle: 12, hours: 2016, label: '2016 h — MESURES FINALES APRÈS EXPOSITION', type: 'FINAL' }
-                ].map((st) => (
-                  <div
-                    key={st.cycle}
-                    className={`p-3 rounded-xl border flex items-center gap-3 ${
-                      st.cycle === 0
-                        ? 'border-blue-300 bg-blue-50/60'
-                        : st.cycle === 12
-                        ? 'border-emerald-300 bg-emerald-50/60'
-                        : 'border-slate-200 bg-white'
-                    }`}
-                  >
+                  { cycle: 12, hours: 2016, label: 'C12 (2016 h) — MESURES FINALES APRÈS EXPOSITION', type: 'FINAL' }
+                ].map((st) => {
+                  const isMandatory = st.cycle === 0 || st.cycle === 12;
+                  const isSelected = selectedMeasurementCycles.includes(st.cycle);
+
+                  return (
                     <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                        st.cycle === 0
-                          ? 'bg-blue-600 text-white'
-                          : st.cycle === 12
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-slate-200 text-slate-700'
+                      key={st.cycle}
+                      onClick={() => !isMandatory && toggleCycleMeasurement(st.cycle)}
+                      className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+                        isMandatory
+                          ? st.cycle === 0
+                            ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-400/40 cursor-default'
+                            : 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-400/40 cursor-default'
+                          : isSelected
+                          ? 'border-blue-400 bg-blue-50/40 shadow-xs cursor-pointer hover:border-blue-500'
+                          : 'border-slate-200 bg-slate-50/80 opacity-50 hover:opacity-80 cursor-pointer'
                       }`}
                     >
-                      {st.cycle === 0 ? 'T0' : `C${st.cycle}`}
+                      <div
+                        className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-bold text-xs shrink-0 ${
+                          st.cycle === 0
+                            ? 'bg-blue-600 text-white'
+                            : st.cycle === 12
+                            ? 'bg-emerald-600 text-white'
+                            : isSelected
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-300 text-slate-700'
+                        }`}
+                      >
+                        <span>{st.cycle === 0 ? 'T0' : `C${st.cycle}`}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-xs font-bold text-slate-900 truncate">
+                            {st.cycle === 0 ? 'T0 (0 h)' : `C${st.cycle} — ${st.hours} h`}
+                          </p>
+                          {isMandatory && (
+                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-slate-200 text-slate-700">
+                              Obligatoire
+                            </span>
+                          )}
+                          {!isMandatory && (
+                            <span
+                              className={`px-1.5 py-0.2 text-[9px] font-bold rounded ${
+                                isSelected ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {isSelected ? 'Mesuré' : 'Exposition seule'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{st.label}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900 truncate">{st.label}</p>
-                      <p className="text-[10px] text-slate-500 font-mono">{st.hours} h cumulées</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

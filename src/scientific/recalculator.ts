@@ -17,8 +17,9 @@ import {
 import { calculateColor } from './colorEngine';
 import { calculateGloss } from './glossEngine';
 import { calculatePersoz } from './persozEngine';
+import { calculateAdhesion } from './adhesionEngine';
 import { calculateObservations } from './observationsEngine';
-import { VisualObservationsRawData } from '../types/scientific';
+import { VisualObservationsRawData, AdhesionRawData } from '../types/scientific';
 
 export interface RecalculationResult {
   updatedRecord: PanelAcquisitionRecord;
@@ -99,6 +100,22 @@ export function recalculateAcquisition(
       ruleSet,
       {
         referenceRaw: referenceRaw as PersozRawData | null,
+        referenceStageId: initialStage?.id,
+        panelId: record.panelId,
+        stageId: record.stageId,
+        calculationVersion: options?.customCalculationVersion
+      }
+    );
+    computed = res.computed;
+    alerts = res.alerts;
+  } else if (record.familyId === 'ADHESION') {
+    const countConfig = famConfig?.countConfig || ruleSet.measurementConfigurations.ADHESION;
+    const res = calculateAdhesion(
+      record.raw as AdhesionRawData,
+      countConfig,
+      ruleSet,
+      {
+        referenceRaw: referenceRaw as AdhesionRawData | null,
         referenceStageId: initialStage?.id,
         panelId: record.panelId,
         stageId: record.stageId,

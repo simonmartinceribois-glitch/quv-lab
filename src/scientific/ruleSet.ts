@@ -81,6 +81,20 @@ export function getDefaultScientificRuleSet(): ScientificRuleSet {
         configuredBy: 'SYSTEM',
         configuredAt: '2026-08-30T00:00:00Z',
         ruleSource: 'LAB_RECOMMENDATION'
+      },
+      ADHESION: {
+        familyId: 'ADHESION',
+        mode: 'STANDARD_DEFAULT',
+        origin: 'NORMATIVE_REQUIREMENT',
+        standardReference: 'NF EN ISO 2409:2020',
+        clause: '§5 & §6 (Essai de quadrillage)',
+        rationale: 'Évaluation de la résistance du revêtement à la séparation par quadrillage (6×6 incisions, espacement selon épaisseur sèche)',
+        standardRecommendedCount: 1,
+        configuredCount: 1,
+        deviationFromStandard: false,
+        configuredBy: 'SYSTEM',
+        configuredAt: '2026-08-30T00:00:00Z',
+        ruleSource: 'NORMATIVE_REQUIREMENT'
       }
     },
 

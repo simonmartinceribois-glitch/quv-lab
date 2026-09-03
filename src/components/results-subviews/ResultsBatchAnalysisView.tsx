@@ -105,7 +105,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
         <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
           <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
           <div>
-            <strong>Règle d'exclusion absolue du Témoin T :</strong> Le témoin conservé à l'obscurité (T) est strictement exclu de la moyenne de performance du lot, de l'écart-type $s_{inter}$, de la cinétique et du résultat global des exposés. Il est affiché dans sa colonne dédiée pour comparaison directe.
+            <strong>Règle d'exclusion absolue du Témoin T :</strong> Le témoin conservé à l'obscurité (T) est strictement exclu de la moyenne de performance du lot, de l'écart-type s_inter, de la cinétique et du résultat global des exposés. Il est affiché dans sa colonne dédiée pour comparaison directe.
           </div>
         </div>
 
@@ -144,7 +144,7 @@ export function ResultsBatchAnalysisView({ trial, ruleSet }: Props) {
               Résultats Moyens & Agrégations des Éprouvettes Exposées (E1, E2, E3)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Moyennes et dispersions inter-panneaux ($s_{inter}$) calculées exclusivement sur les éprouvettes exposées aux cycles QUV
+              Moyennes et dispersions inter-panneaux (s_inter) calculées exclusivement sur les éprouvettes exposées aux cycles QUV
             </p>
           </div>
         </div>

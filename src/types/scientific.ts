@@ -65,7 +65,7 @@ export type PanelStatus = 'ACTIVE' | 'EXCLUDED';
 export type AcquisitionStatus = 'EMPTY' | 'PARTIAL' | 'COMPLETE' | 'WARNING' | 'ERROR';
 export type AlertSeverity = 'INFO' | 'WARNING' | 'BLOCKING';
 
-export type MeasurementFamilyId = 'COLOR' | 'GLOSS' | 'PERSOZ' | 'OBSERVATIONS' | string;
+export type MeasurementFamilyId = 'COLOR' | 'GLOSS' | 'PERSOZ' | 'ADHESION' | 'OBSERVATIONS' | string;
 export type StandardDeviationMethod = 'SAMPLE' | 'POPULATION';
 
 export type ScientificAlertCode =
@@ -246,10 +246,16 @@ export interface ColorComputedData {
   chromaC: number | null;
   hueH: number | null;
   referenceStageId?: UUID | null;
+  initialMeanL?: number | null;
+  initialMeanA?: number | null;
+  initialMeanB?: number | null;
   deltaL: number | null;
   deltaA: number | null;
   deltaB: number | null;
   deltaE: number | null;
+  deltaC?: number | null;
+  deltaH?: number | null;
+  criterionCategory?: string;
   qualityAssessment: QualityAssessment;
   protocolStatus: ProtocolComplianceStatus;
   computation: ComputationMetadata;
@@ -269,6 +275,7 @@ export interface GlossMeasurementSeries {
 
 export interface GlossRawData {
   series: GlossMeasurementSeries[];
+  mode?: 'NORMATIVE_4' | 'SIMPLIFIED_2' | 'NORMATIVE_6';
   instrumentMetadata?: {
     instrumentId?: string;
     geometry?: '60' | '20' | '85' | string;
@@ -278,6 +285,9 @@ export interface GlossRawData {
 export interface GlossComputedData {
   totalReadings: number;
   validCount: number;
+  glossMode?: 'NORMATIVE_4' | 'SIMPLIFIED_2' | 'NORMATIVE_6';
+  initialMeanGloss?: number | null;
+  initialStdDevGloss?: number | null;
   meanGloss: number | null;
   stdDevGloss: number | null;
   seriesStats: {
@@ -289,7 +299,10 @@ export interface GlossComputedData {
   }[];
   referenceStageId?: UUID | null;
   deltaGloss: number | null;
+  deltaGlossStdDev?: number | null;
   retentionRatePercent: number | null;
+  infiperfAlert?: { active: boolean; message: string; source: 'INFIPERF / FCBA'; severity: 'WARNING' };
+  criterionCategory?: string;
   qualityAssessment: QualityAssessment;
   protocolStatus: ProtocolComplianceStatus;
   computation: ComputationMetadata;
@@ -314,12 +327,49 @@ export interface PersozRawData {
 export interface PersozComputedData {
   pointsCount: number;
   validCount: number;
+  initialMeanDampingTime?: number | null;
   meanDampingTime: number | null;
   stdDevDampingTime: number | null;
   coefficientOfVariationPercent: number | null;
   referenceStageId?: UUID | null;
   deltaDampingTime: number | null;
   relativeHardnessVariationPercent: number | null;
+  criterionCategory?: string;
+  qualityAssessment: QualityAssessment;
+  protocolStatus: ProtocolComplianceStatus;
+  computation: ComputationMetadata;
+}
+
+// --- ADHÉRENCE — QUADRILLAGE (NF EN ISO 2409:2020) ---
+export type AdhesionClassRating = 0 | 1 | 2 | 3 | 4 | 5;
+
+export interface AdhesionRawData {
+  adhesionClass: AdhesionClassRating | number | null; // 0 à 5
+  observation?: string;
+  measurementDateTime: ISODateString;
+  applicationDateTime?: string; // Récupéré de batch.applicationDate
+  coatingThicknessMicrons?: number | null;
+  gridSpacingMm: number; // 1, 2, 3 mm selon NF EN ISO 2409
+  bladeType?: string; // 'SINGLE_BLADE_6_CUTS' | 'MULTI_BLADE' | string
+  tapeType?: string; // 'IEC 60454-2' | string
+  conditioning?: string; // ex: "23°C / 50% HR"
+  requiredMinimumDelayHours: number; // ex: 168 h (7 jours)
+  elapsedTimeHours?: number | null;
+  delayStatus?: 'CONFORME' | 'INSUFFICIENT_DELAY' | 'INVALID_DATE' | 'MISSING_APPLICATION_DATE';
+  mediaId?: UUID | null;
+  operatorId?: string;
+  normReference: string; // "NF EN ISO 2409:2020"
+}
+
+export interface AdhesionComputedData {
+  adhesionClass: number | null;
+  classDescription: string;
+  initialAdhesionClass?: number | null;
+  deltaAdhesionClass?: number | null; // Variation d'adhérence vs T0
+  elapsedTimeHours: number | null;
+  delayCompliance: 'CONFORME' | 'NON_CONFORME' | 'NON_EVALUE';
+  gridSpacingUsedMm: number;
+  criterionCategory?: string;
   qualityAssessment: QualityAssessment;
   protocolStatus: ProtocolComplianceStatus;
   computation: ComputationMetadata;
@@ -470,6 +520,7 @@ export interface ScientificReport {
     colorResults: string;
     glossResults: string;
     persozResults: string;
+    adhesionResults?: string;
     visualObservations: string;
     kineticsAnalysis: string;
     qualityControl: string;
