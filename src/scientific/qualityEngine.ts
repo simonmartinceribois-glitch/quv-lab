@@ -29,6 +29,22 @@ export function assessStageQuality(
   ruleSet: ScientificRuleSet
 ): StageQualityAssessment {
   const stage = trial.stages.find((s) => s.id === stageId);
+
+  // Gate 54 (D-3) : Un stage exclu du plan de mesurage (INACTIVE) ne doit jamais
+  // être évalué comme incomplet, ACCEPTABLE, ou INVALID.
+  if (!stage || stage.status === 'INACTIVE') {
+    return {
+      stageId,
+      panelsEvaluated: 0,
+      panelsComplete: 0,
+      panelsWithWarnings: 0,
+      panelsInvalid: 0,
+      familyAssessments: {} as Record<string, QualityStatus>,
+      globalStatus: 'GOOD',
+      calculationVersion: QUALITY_ASSESSMENT_VERSION
+    };
+  }
+
   const scheduledFamilies = stage
     ? getActiveFamiliesForStage(trial.config.activeFamilies, stage)
     : trial.config.activeFamilies;

@@ -7,6 +7,7 @@
 import { Trial, ExposureStage, BatchDefinition } from '../../types/trial';
 import { ScientificRuleSet, MeasurementFamilyId } from '../../types/scientific';
 import { AnalysisAnomaly } from '../../types/analysis';
+import { getActiveFamiliesForStage } from '../panelUtils';
 
 export function detectTrialAnomalies(
   trial: Trial,
@@ -154,11 +155,14 @@ export function detectTrialAnomalies(
   // C. ANOMALIES DE COMPLÉTUDE & MÉTROLOGIE PAR PANNEAU ET ÉTAPE
   // --------------------------------------------------------------------------
   for (const stage of selectedStages) {
+    if (stage.status === 'INACTIVE') continue;
+    const stageApplicableFamilies = getActiveFamiliesForStage(activeFamilies, stage);
+
     for (const batch of selectedBatches) {
       const activePanels = batch.panels.filter((p) => p.status === 'ACTIVE');
 
       for (const panel of activePanels) {
-        for (const familyId of activeFamilies) {
+        for (const familyId of stageApplicableFamilies) {
           const acqKey = `${stage.id}__${panel.id}__${familyId}`;
           const acq = trial.acquisitions[acqKey];
 

@@ -423,14 +423,20 @@ export function runGate22RegressionTests(): {
     const isStageStillActive = stageC2AfterAttempt?.status !== 'INACTIVE';
     const isAcquisitionPreserved = Boolean(trialAfterAttempt?.acquisitions[`${stageC2.id}__${mock.batches[0].panels[0].id}__COLOR`]);
 
-    // 2. Vérifier que sur un jalon intermédiaire sans acquisition (C3), la désactivation et réactivation restent possibles
-    const stageC3 = mock.stages[3];
-    globalTrialStore.toggleStageStatus(mock.id, stageC3.id, 'Tester', 'Désactivation jalon vierge');
-    let trialAfterC3Deact = globalTrialStore.getTrial(mock.id);
+    // 2. Vérifier que sur un essai sans acquisition en configuration EDITABLE, la désactivation et réactivation d'un jalon intermédiaire restent possibles
+    const mockVierge = createMockTrial();
+    mockVierge.id = `trial-gate22-vierge-${Date.now()}`;
+    mockVierge.configurationStatus = 'EDITABLE';
+    mockVierge.acquisitions = {};
+    globalTrialStore.saveTrial(mockVierge);
+
+    const stageC3 = mockVierge.stages[3];
+    globalTrialStore.toggleStageStatus(mockVierge.id, stageC3.id, 'Tester', 'Désactivation jalon vierge');
+    let trialAfterC3Deact = globalTrialStore.getTrial(mockVierge.id);
     const stageC3Inactive = trialAfterC3Deact?.stages.find((s) => s.id === stageC3.id)?.status === 'INACTIVE';
 
-    globalTrialStore.toggleStageStatus(mock.id, stageC3.id, 'Tester', 'Réactivation jalon vierge');
-    let trialAfterC3React = globalTrialStore.getTrial(mock.id);
+    globalTrialStore.toggleStageStatus(mockVierge.id, stageC3.id, 'Tester', 'Réactivation jalon vierge');
+    let trialAfterC3React = globalTrialStore.getTrial(mockVierge.id);
     const stageC3Reactivated = trialAfterC3React?.stages.find((s) => s.id === stageC3.id)?.status !== 'INACTIVE';
 
     const passed =

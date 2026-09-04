@@ -38,7 +38,10 @@ import {
   FileText,
   Tag,
   Clock,
-  Sparkles
+  Sparkles,
+  Lock,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface Props {
@@ -245,20 +248,27 @@ export function CreateTrialWizardModal({
   const isPersozAdapted = persozReps !== 3;
   const isPersozAdaptationInvalid = isPersozAdapted && persozJustification.trim().length === 0;
 
+  const isStep1Valid = Boolean(reference.trim() && createdBy.trim());
   const isStep5Valid = !isColorAdaptationInvalid && !isGlossAdaptationInvalid && !isPersozAdaptationInvalid;
+  const isFinalStepValid = Boolean(createdBy.trim());
 
   // Calcul du nombre total de panneaux
   const totalPanelsCount = batches.reduce((sum, b) => sum + (Number(b.panelCount) || 1), 0);
 
   // Soumission finale
   const handleFinalCreate = () => {
+    const trimmedCreatedBy = createdBy.trim();
+    if (!trimmedCreatedBy) {
+      return;
+    }
+
     const metadata: TrialMetadata = {
       reference: reference.trim(),
       title: title.trim() || 'Essai de vieillissement accéléré UV (NF EN 927-6)',
       projectOrClient: projectOrClient.trim() || 'Projet Interne',
       coatingSystemDescription: batches.map((b) => `${b.reference}: ${b.coatingSystem}`).join(' | '),
       substrateDescription: `${substrateNature} — ${materialType} (${lengthMm}×${widthMm}×${thicknessMm} ${dimUnit})`,
-      createdBy: createdBy.trim() || 'OPERATOR',
+      createdBy: trimmedCreatedBy,
       generalNotes: generalNotes.trim()
     };
 
@@ -278,18 +288,18 @@ export function CreateTrialWizardModal({
     };
 
     const colorConfig = isColorAdapted
-      ? createCountConfiguration('COLOR', colorPoints, ruleSet, { justification: colorJustification, operatorId: createdBy })
+      ? createCountConfiguration('COLOR', colorPoints, ruleSet, { justification: colorJustification, operatorId: trimmedCreatedBy })
       : createCountConfiguration('COLOR', 4, ruleSet);
 
     const glossConfig = isGlossAdapted
       ? createSeriesConfiguration('GLOSS', glossSeriesCount, glossReadingsPerSeries, ruleSet, {
           justification: glossJustification,
-          operatorId: createdBy
+          operatorId: trimmedCreatedBy
         })
       : createSeriesConfiguration('GLOSS', 2, 2, ruleSet);
 
     const persozConfig = isPersozAdapted
-      ? createCountConfiguration('PERSOZ', persozReps, ruleSet, { justification: persozJustification, operatorId: createdBy })
+      ? createCountConfiguration('PERSOZ', persozReps, ruleSet, { justification: persozJustification, operatorId: trimmedCreatedBy })
       : createCountConfiguration('PERSOZ', 3, ruleSet);
 
     const createdTrial = globalTrialStore.createTrial({
@@ -412,9 +422,16 @@ export function CreateTrialWizardModal({
                     type="text"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono font-bold"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono font-bold ${
+                      !reference.trim() ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300'
+                    }`}
                     placeholder="Ex: QUV-2026-042"
                   />
+                  {!reference.trim() && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                      La référence unique est obligatoire pour la traçabilité.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -451,9 +468,16 @@ export function CreateTrialWizardModal({
                     type="text"
                     value={createdBy}
                     onChange={(e) => setCreatedBy(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 font-medium ${
+                      !createdBy.trim() ? 'border-rose-300 bg-rose-50/20' : 'border-slate-300'
+                    }`}
                     placeholder="Ex: Simon Martin (Technicien)"
                   />
+                  {!createdBy.trim() && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                      L'opérateur responsable est requis pour la traçabilité réglementaire de l'essai.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -539,7 +563,7 @@ export function CreateTrialWizardModal({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Nature du support *
+                    Nature du support
                   </label>
                   <input
                     type="text"
@@ -552,7 +576,7 @@ export function CreateTrialWizardModal({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Type de matériau / Essence de référence *
+                    Type de matériau / Essence de référence
                   </label>
                   <input
                     type="text"
@@ -1086,57 +1110,135 @@ export function CreateTrialWizardModal({
           {/* ============================================================ */}
           {step === 6 && (
             <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <Calendar className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              {/* En-tête explicatif & Statut du plan */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <Calendar className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-sm text-slate-900">Calendrier d'Exposition UV & Plan de Mesurage (NF EN 927-6)</p>
+                      <p className="mt-0.5 text-slate-700 leading-relaxed">
+                        Définissez les moments où les mesures seront réellement réalisées. Les 12 cycles physiques d'exposition de 168 h (2016 h cumulées) restent présents indépendamment du plan de mesurage.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-bold shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                    PLAN MODIFIABLE
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 pl-8 italic">
+                  Le plan sera automatiquement verrouillé (LOCKED) après la première acquisition scientifique saisie sur paillasse.
+                </p>
+              </div>
+
+              {/* Règle spécifique ADHESION (si la famille est sélectionnée) */}
+              {activeFamilies.includes('ADHESION') && (
+                <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-3.5 text-xs text-amber-950 flex items-start gap-3">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold">Calendrier d'Exposition UV & Plan de Mesurage (NF EN 927-6)</p>
-                    <p className="mt-0.5 text-slate-700">
-                      Les 12 cycles physiques de 168 h (C1 à C12) sont toujours conservés. Sélectionnez ci-dessous les jalons où des campagnes de mesures scientifiques seront effectivement réalisées.
+                    <p className="font-bold text-amber-900 flex items-center gap-2">
+                      <span>RÈGLE SPÉCIFIQUE — ADHÉRENCE AU QUADRILLAGE (NF EN ISO 2409)</span>
+                      <span className="bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">T0 + C12 uniquement</span>
                     </p>
+                    <p className="mt-1 text-amber-900/90 text-[11px] leading-relaxed">
+                      L'adhérence est un essai mécanique destructif réalisé exclusivement <strong>avant exposition (T0, 0 h)</strong> et au terme des 2016 h <strong>(C12, 2016 h)</strong>. Elle n'est jamais mesurée aux jalons intermédiaires C1 à C11, quel que soit le plan de mesurage sélectionné ci-dessous.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Présélections rapides & Compteur */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700 mr-1">Préréglages :</span>
+                    <button
+                      type="button"
+                      onClick={() => setPlanPreset('FULL')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                        selectedMeasurementCycles.length === 13
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      Standard Complet (13 jalons)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanPreset('QUARTERLY')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                        selectedMeasurementCycles.length === 5 && selectedMeasurementCycles.includes(3) && selectedMeasurementCycles.includes(6)
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      Jalons Clés / Trimestriels (5 jalons)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanPreset('LIGHT')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                        selectedMeasurementCycles.length === 3 && selectedMeasurementCycles.includes(6)
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      Protocole Allégé (3 jalons)
+                    </button>
+                    {selectedMeasurementCycles.length !== 13 &&
+                      !(selectedMeasurementCycles.length === 5 && selectedMeasurementCycles.includes(3) && selectedMeasurementCycles.includes(6)) &&
+                      !(selectedMeasurementCycles.length === 3 && selectedMeasurementCycles.includes(6)) && (
+                        <span className="px-2 py-1 text-[11px] font-bold rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700">
+                          Plan Personnalisé
+                        </span>
+                      )}
+                  </div>
+
+                  {/* Compteur de mesurage */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500 font-medium">Jalons de mesurage :</span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+                      <strong className="text-blue-700">{selectedMeasurementCycles.length}</strong> / 13
+                    </span>
+                  </div>
+                </div>
+
+                {/* Résumé des mesures prévues */}
+                <div className="pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-slate-600">Mesures prévues :</span>
+                    <div className="flex flex-wrap gap-1 font-mono font-bold text-xs">
+                      {selectedMeasurementCycles.map((c) => (
+                        <span
+                          key={c}
+                          className={`px-2 py-0.5 rounded border text-[11px] ${
+                            c === 0
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : c === 12
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                          }`}
+                        >
+                          {c === 0 ? 'T0' : `C${c}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {13 - selectedMeasurementCycles.length > 0 ? (
+                      <span>
+                        <strong>{13 - selectedMeasurementCycles.length}</strong> cycle(s) en <em>exposition continue seule</em> sans arrêt paillasse
+                      </span>
+                    ) : (
+                      <span>Campagne de mesurage prévue à chaque cycle</span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Présélections rapides de plan de mesurage */}
-              <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
-                <span className="text-xs font-bold text-slate-600 mr-1">Préréglages :</span>
-                <button
-                  type="button"
-                  onClick={() => setPlanPreset('FULL')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
-                    selectedMeasurementCycles.length === 13
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Standard Complet (T0 + C1 à C12)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPlanPreset('QUARTERLY')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
-                    selectedMeasurementCycles.length === 5 && selectedMeasurementCycles.includes(3) && selectedMeasurementCycles.includes(6)
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Jalons Clés / Trimestriels (T0, C3, C6, C9, C12)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPlanPreset('LIGHT')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
-                    selectedMeasurementCycles.length === 3 && selectedMeasurementCycles.includes(6)
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Protocole Allégé (T0, C6, C12)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-96 overflow-y-auto pr-1">
+              {/* Grille des 13 cycles physiques d'exposition (sans scroll interne artificiel) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
                 {[
                   { cycle: 0, hours: 0, label: 'T0 — MESURES INITIALES AVANT EXPOSITION', type: 'INITIAL' },
                   ...Array.from({ length: 11 }, (_, i) => ({
@@ -1154,50 +1256,78 @@ export function CreateTrialWizardModal({
                     <div
                       key={st.cycle}
                       onClick={() => !isMandatory && toggleCycleMeasurement(st.cycle)}
-                      className={`p-3 rounded-xl border flex items-center gap-3 transition-all ${
+                      className={`p-3 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
                         isMandatory
                           ? st.cycle === 0
-                            ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-400/40 cursor-default'
-                            : 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-400/40 cursor-default'
+                            ? 'border-blue-300 bg-blue-50/70 ring-1 ring-blue-400/30 cursor-default'
+                            : 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-400/30 cursor-default'
                           : isSelected
-                          ? 'border-blue-400 bg-blue-50/40 shadow-xs cursor-pointer hover:border-blue-500'
-                          : 'border-slate-200 bg-slate-50/80 opacity-50 hover:opacity-80 cursor-pointer'
+                          ? 'border-blue-400 bg-blue-50/40 shadow-xs ring-1 ring-blue-400/20 cursor-pointer hover:border-blue-500'
+                          : 'border-slate-200 bg-slate-50/90 hover:bg-slate-100/70 cursor-pointer hover:border-slate-300'
                       }`}
                     >
-                      <div
-                        className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-bold text-xs shrink-0 ${
-                          st.cycle === 0
-                            ? 'bg-blue-600 text-white'
-                            : st.cycle === 12
-                            ? 'bg-emerald-600 text-white'
-                            : isSelected
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-300 text-slate-700'
-                        }`}
-                      >
-                        <span>{st.cycle === 0 ? 'T0' : `C${st.cycle}`}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-bold text-slate-900 truncate">
-                            {st.cycle === 0 ? 'T0 (0 h)' : `C${st.cycle} — ${st.hours} h`}
-                          </p>
-                          {isMandatory && (
-                            <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-slate-200 text-slate-700">
-                              Obligatoire
-                            </span>
-                          )}
-                          {!isMandatory && (
-                            <span
-                              className={`px-1.5 py-0.2 text-[9px] font-bold rounded ${
-                                isSelected ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
-                              }`}
-                            >
-                              {isSelected ? 'Mesuré' : 'Exposition seule'}
-                            </span>
-                          )}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-lg flex flex-col items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                            st.cycle === 0
+                              ? 'bg-blue-600 text-white'
+                              : st.cycle === 12
+                              ? 'bg-emerald-600 text-white'
+                              : isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          <span>{st.cycle === 0 ? 'T0' : `C${st.cycle}`}</span>
                         </div>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{st.label}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {st.cycle === 0 ? 'T0 (0 h)' : `C${st.cycle} — ${st.hours} h`}
+                            </p>
+                            {isMandatory && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-200 text-slate-800">
+                                <Lock className="w-2.5 h-2.5" />
+                                Obligatoire
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 truncate mt-0.5">
+                            {st.cycle === 0 ? 'Mesures initiales' : st.cycle === 12 ? 'Mesures finales' : 'Étape intermédiaire'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Indicateur d'état mesurage vs exposition */}
+                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px]">
+                        {isMandatory ? (
+                          <span className="font-bold text-slate-700 flex items-center gap-1">
+                            <Lock className="w-3 h-3 text-slate-500" />
+                            Mesure obligatoire
+                          </span>
+                        ) : isSelected ? (
+                          <span className="font-bold text-blue-700 flex items-center gap-1">
+                            <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                            Mesuré
+                          </span>
+                        ) : (
+                          <span className="font-medium text-slate-500 flex items-center gap-1">
+                            <Square className="w-3.5 h-3.5 text-slate-400" />
+                            Exposition seule
+                          </span>
+                        )}
+
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            isMandatory
+                              ? 'bg-slate-200 text-slate-800'
+                              : isSelected
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {isMandatory ? 'Inviolable' : isSelected ? 'Campagne active' : 'Sans arrêt'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1231,7 +1361,16 @@ export function CreateTrialWizardModal({
                     <p><span className="text-slate-500">Référence :</span> <strong className="font-mono">{reference}</strong></p>
                     <p><span className="text-slate-500">Titre :</span> {title || '—'}</p>
                     <p><span className="text-slate-500">Demandeur :</span> {projectOrClient || '—'}</p>
-                    <p><span className="text-slate-500">Opérateur :</span> {createdBy}</p>
+                    <p>
+                      <span className="text-slate-500">Opérateur :</span>{' '}
+                      {createdBy.trim() ? (
+                        <strong className="text-slate-900">{createdBy.trim()}</strong>
+                      ) : (
+                        <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                          Non renseigné (bloquant pour la création)
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -1269,20 +1408,66 @@ export function CreateTrialWizardModal({
                 </div>
               </div>
 
-              {/* Plan de Mesure */}
+              {/* Plan de Mesure (Familles) */}
               <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
                 <h4 className="font-bold text-slate-900 uppercase tracking-wider border-b pb-1.5">
-                  4. Plan de Mesure ({activeFamilies.length} grandeurs actives)
+                  4. Grandeurs & Caractérisations ({activeFamilies.length} familles actives)
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {activeFamilies.map((f) => (
-                    <div key={f} className="p-2 rounded bg-slate-50 border border-slate-100 font-medium text-center">
-                      {f === 'COLOR' && `Couleur (${colorPoints} pts)`}
-                      {f === 'GLOSS' && `Brillance (${glossSeriesCount}×${glossReadingsPerSeries})`}
+                    <div key={f} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 font-medium text-xs">
+                      {f === 'COLOR' && `Couleur (${colorPoints} pts / face)`}
+                      {f === 'GLOSS' && `Brillance (${glossSeriesCount}×${glossReadingsPerSeries} mes)`}
                       {f === 'PERSOZ' && `Persoz (${persozReps} reps)`}
                       {f === 'OBSERVATIONS' && 'Observations ISO'}
+                      {f === 'ADHESION' && (
+                        <div className="text-amber-900 font-semibold">
+                          <span>Adhérence ISO 2409</span>
+                          <span className="block text-[10px] text-amber-700 font-normal">T0 + C12 uniquement</span>
+                        </div>
+                      )}
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Calendrier & Plan de Mesurage */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5 text-xs">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider border-b pb-1.5 flex items-center justify-between">
+                  <span>5. Calendrier & Plan de Mesurage ({selectedMeasurementCycles.length} jalons mesurés / 13)</span>
+                  <span className="font-mono text-emerald-700 font-bold">2016 h cumulées (12 cycles)</span>
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-500 font-medium">Jalons mesurés prévus :</span>
+                    <div className="flex flex-wrap gap-1 font-mono font-bold">
+                      {selectedMeasurementCycles.map((c) => (
+                        <span
+                          key={c}
+                          className={`px-2 py-0.5 rounded border text-[11px] ${
+                            c === 0
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : c === 12
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                          }`}
+                        >
+                          {c === 0 ? 'T0 (0 h)' : `C${c} (${c * 168} h)`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    Les 12 cycles physiques d'exposition de 168 h sont maintenus dans le modèle. {13 - selectedMeasurementCycles.length > 0 ? `${13 - selectedMeasurementCycles.length} cycle(s) seront en exposition continue seule sans arrêt paillasse.` : 'Tous les cycles feront l\'objet d\'une campagne de caractérisation.'}
+                  </p>
+                  {activeFamilies.includes('ADHESION') && (
+                    <div className="text-amber-900 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 text-[11px] flex items-start gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Règle normative Adhérence (NF EN ISO 2409) :</strong> Mesurée exclusivement à T0 (0 h) et C12 (2016 h). Aucun essai d'adhérence aux jalons intermédiaires C1 à C11.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1314,28 +1499,49 @@ export function CreateTrialWizardModal({
             {step < 7 ? (
               <button
                 onClick={() => {
-                  if (step === 1 && !reference.trim()) return;
+                  if (step === 1 && !isStep1Valid) return;
                   if (step === 5 && !isStep5Valid) return;
                   setStep((step + 1) as any);
                 }}
-                disabled={step === 5 && !isStep5Valid}
+                disabled={(step === 1 && !isStep1Valid) || (step === 5 && !isStep5Valid)}
                 className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs disabled:opacity-50"
               >
                 Suivant
                 <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
-              <button
-                onClick={handleFinalCreate}
-                className="flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Créer l'Essai et Ouvrir la Campagne
-              </button>
+              <div className="flex items-center gap-3">
+                {!createdBy.trim() && (
+                  <span className="text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs">
+                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                    Créateur de l'essai obligatoire pour finaliser la création
+                  </span>
+                )}
+                <button
+                  id="btn-create-trial-final"
+                  onClick={handleFinalCreate}
+                  disabled={!createdBy.trim()}
+                  className="flex items-center gap-1.5 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Créer l'Essai et Ouvrir la Campagne
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Règle de validation du bouton final de création (GATE 53)
+ * Vérifie que la création ne peut jamais aboutir si le créateur est absent ou constitué d'espaces blancs.
+ */
+export function isFinalCreateAllowed(step: number, createdBy: string): boolean {
+  if (step === 7) {
+    return Boolean(createdBy && createdBy.trim().length > 0);
+  }
+  return true;
 }

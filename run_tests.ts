@@ -8,6 +8,8 @@ import { runGate34NormativeReportingTests } from './src/scientific/tests/gate34_
 import { runGate40SystemValidationTests } from './src/scientific/tests/gate40_system_validation.test';
 import { runGate50OperationalQualificationTests } from './src/scientific/tests/gate50_operational_qualification.test';
 import { runGate52AdhesionTests } from './src/scientific/tests/gate52_adhesion.test';
+import { runGate53MediaCreatorTests } from './src/scientific/tests/gate53_media_creator_integrity.test';
+import { runGate54CalendarMeasurementPlanTests } from './src/scientific/tests/gate54_calendar_measurement_plan_integrity.test';
 
 console.log('================================================================');
 console.log('1. EXÉCUTION DE LA SUITE DE TESTS SCIENTIFIQUES GÉNÉRALE (44 TESTS)');
@@ -136,6 +138,32 @@ suite10.results.forEach((r) => {
   }
 });
 
+console.log('\n================================================================');
+console.log('11. EXÉCUTION DE LA VALIDATION GATE 53 — INTÉGRITÉ CRÉATEUR & MÉDIAS (8 TESTS)');
+console.log('================================================================');
+const suite11 = runGate53MediaCreatorTests();
+console.log(`Résultats Suite GATE 53 : ${suite11.summary.passed} / ${suite11.summary.total} réussis.`);
+suite11.results.forEach((r) => {
+  console.log(`[${r.passed ? 'PASS ✓' : 'FAIL ✗'}] [Gate 53 ${r.category}] ${r.id} - ${r.name}`);
+  if (!r.passed) {
+    console.error(`   Attendu: ${r.expected}`);
+    console.error(`   Obtenu:  ${r.actual}`);
+  }
+});
+
+console.log('\n================================================================');
+console.log('12. EXÉCUTION DE LA VALIDATION GATE 54 — CALENDRIER & PLAN DE MESURAGE (15 TESTS)');
+console.log('================================================================');
+const suite12 = runGate54CalendarMeasurementPlanTests();
+console.log(`Résultats Suite GATE 54 : ${suite12.summary.passed} / ${suite12.summary.total} réussis.`);
+suite12.results.forEach((r) => {
+  console.log(`[${r.passed ? 'PASS ✓' : 'FAIL ✗'}] [Gate 54 ${r.category}] ${r.id} - ${r.name}`);
+  if (!r.passed) {
+    console.error(`   Attendu: ${r.expected}`);
+    console.error(`   Obtenu:  ${r.actual}`);
+  }
+});
+
 const totalFailed =
   suite1.summary.failed +
   suite2.summary.failed +
@@ -146,7 +174,9 @@ const totalFailed =
   suite7.summary.failed +
   suite8.summary.failed +
   suite9.failed +
-  suite10.summary.failed;
+  suite10.summary.failed +
+  suite11.summary.failed +
+  suite12.summary.failed;
 const totalCount =
   suite1.summary.total +
   suite2.summary.total +
@@ -157,7 +187,9 @@ const totalCount =
   suite7.summary.total +
   suite8.summary.total +
   suite9.total +
-  suite10.summary.total;
+  suite10.summary.total +
+  suite11.summary.total +
+  suite12.summary.total;
 
 if (totalFailed > 0) {
   console.error(`\n❌ Échec total : ${totalFailed} tests ont échoué.`);

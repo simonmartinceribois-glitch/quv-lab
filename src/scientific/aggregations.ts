@@ -27,12 +27,21 @@ import {
   calculateSampleStdDev,
   roundMetric
 } from './statistics';
-import { isWitnessPanel } from './panelUtils';
 
 export const AGGREGATION_CALCULATION_VERSION = '1.1.0';
 
 /**
- * Calcule l'agrégation des mesures d'un lot pour la famille Couleur (inter-panneaux)
+ * Calcule l'agrégation des mesures d'un lot pour la famille Couleur (inter-panneaux).
+ *
+ * CONTRAT SCIENTIFIQUE IMPÉRATIF (GATE 55 — D-8) :
+ * Les données transmises dans `panelComputedList` doivent provenir EXCLUSIVEMENT des
+ * panneaux exposés actifs (E1, E2, E3). Le panneau Témoin T, conservé à l'obscurité,
+ * ne doit JAMAIS être injecté dans cette liste d'agrégation.
+ * Le filtrage doit être garanti en amont par l'appelant à l'aide de `getActiveExposedPanels()`.
+ *
+ * @param batchId Identifiant du lot
+ * @param stageId Identifiant de l'étape
+ * @param panelComputedList Liste des résultats calculés des panneaux exposés actifs uniquement
  */
 export function aggregateBatchColor(
   batchId: UUID,
@@ -66,7 +75,17 @@ export function aggregateBatchColor(
 }
 
 /**
- * Calcule l'agrégation des mesures d'un lot pour la famille Brillance (inter-panneaux)
+ * Calcule l'agrégation des mesures d'un lot pour la famille Brillance (inter-panneaux).
+ *
+ * CONTRAT SCIENTIFIQUE IMPÉRATIF (GATE 55 — D-8) :
+ * Les données transmises dans `panelComputedList` doivent provenir EXCLUSIVEMENT des
+ * panneaux exposés actifs (E1, E2, E3). Le panneau Témoin T, conservé à l'obscurité,
+ * ne doit JAMAIS être injecté dans cette liste d'agrégation.
+ * Le filtrage doit être garanti en amont par l'appelant à l'aide de `getActiveExposedPanels()`.
+ *
+ * @param batchId Identifiant du lot
+ * @param stageId Identifiant de l'étape
+ * @param panelComputedList Liste des résultats calculés des panneaux exposés actifs uniquement
  */
 export function aggregateBatchGloss(
   batchId: UUID,

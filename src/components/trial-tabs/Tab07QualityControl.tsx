@@ -6,6 +6,7 @@
 import React from 'react';
 import { Trial } from '../../types/trial';
 import { ScientificRuleSet } from '../../types/scientific';
+import { getActiveFamiliesForStage } from '../../scientific/panelUtils';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -35,8 +36,11 @@ export function Tab07QualityControl({ trial, ruleSet }: Props) {
   const activeStages = trial.stages.filter((s) => s.status === 'VALIDATED' || s.status === 'IN_PROGRESS');
 
   for (const stage of activeStages) {
+    if (stage.status === 'INACTIVE') continue;
+    const stageApplicableFamilies = getActiveFamiliesForStage(trial.config.activeFamilies, stage);
+
     for (const panel of activePanels) {
-      for (const fam of trial.config.activeFamilies) {
+      for (const fam of stageApplicableFamilies) {
         totalAcquisitionsExpected++;
         const key = `${stage.id}__${panel.id}__${fam}`;
         const rec = trial.acquisitions[key];
@@ -55,6 +59,24 @@ export function Tab07QualityControl({ trial, ruleSet }: Props) {
       ? Math.round((totalAcquisitionsPresent / totalAcquisitionsExpected) * 100)
       : 0;
 
+  const qualityEvaluationLabel =
+    totalAcquisitionsPresent === 0
+      ? 'Évaluation non disponible (Aucune donnée saisie)'
+      : errorCount > 0
+      ? 'Anomalies bloquantes détectées (ERROR)'
+      : warningCount > 0
+      ? 'Avertissements qualité détectés (WARNING)'
+      : 'Relevés métrologiques : GOOD';
+
+  const qualityEvaluationClass =
+    totalAcquisitionsPresent === 0
+      ? 'text-slate-600'
+      : errorCount > 0
+      ? 'text-rose-700'
+      : warningCount > 0
+      ? 'text-amber-700'
+      : 'text-emerald-700';
+
   return (
     <div className="space-y-6">
       {/* 1. BANNIÈRE STRICTE DE DÉCOUPLAGE QUALITÉ VS CONFORMITÉ NORMATIVE */}
@@ -65,11 +87,11 @@ export function Tab07QualityControl({ trial, ruleSet }: Props) {
             Principe Cardinal de Traçabilité Métrologique
           </h4>
           <p className="leading-relaxed">
-            La <strong>qualité des relevés</strong> (statut métrologique des séries brutes, dispersion acceptable, bornes physiques) est <strong>strictement indépendante de la conformité normative finale</strong> de l'essai ou du système de finition.
+            La <strong>qualité des relevés</strong> (statut métrologique des séries brutes, dispersion, bornes physiques) est <strong>strictement indépendante de la conformité normative finale</strong> de l'essai ou du système de finition.
           </p>
           <div className="p-2.5 bg-white/80 border border-blue-200 rounded-xl font-bold text-blue-900 flex items-center gap-2">
             <span>État actuel :</span>
-            <span className="text-emerald-700">Qualité des relevés métrologiques : GOOD</span>
+            <span className={qualityEvaluationClass}>{qualityEvaluationLabel}</span>
             <span>•</span>
             <span className="text-slate-600">Conformité normative NF EN 927-6 : NON ÉVALUÉE (En cours)</span>
           </div>
@@ -128,10 +150,10 @@ export function Tab07QualityControl({ trial, ruleSet }: Props) {
                 </div>
 
                 <div className="flex items-center gap-4 text-xs font-semibold">
-                  <span className="text-emerald-700">✓ Dispersion acceptable</span>
-                  <span className="text-slate-600">Géométrie 60° conforme</span>
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                    Qualité : VALIDÉ
+                  <span className="text-slate-500 font-normal">Dispersion : Donnée non calculée</span>
+                  <span className="text-slate-500 font-normal">Géométrie : Critère non implémenté</span>
+                  <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">
+                    Évaluation non disponible
                   </span>
                 </div>
               </div>

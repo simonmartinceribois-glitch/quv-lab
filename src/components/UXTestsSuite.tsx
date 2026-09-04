@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { Trial } from '../types/trial';
 import { ScientificRuleSet } from '../types/scientific';
-import { globalTrialStore } from '../services/trialStore';
+import { globalTrialStore, TrialStoreService } from '../services/trialStore';
 import { isFamilyScheduledForStage, getActiveFamiliesForStage, isMandatoryStage } from '../scientific/panelUtils';
 import {
   CheckCircle2,
@@ -594,10 +594,42 @@ export const uxTestCases: UXTestCase[] = [
       expectedResult: 'Levée d\'exception et rejet de modification dès que des données existent.',
       targetTab: '04',
       verify: (t) => {
-        const hasAcq = Object.keys(t.acquisitions || {}).length > 0;
+        // Isolation stricte Gate 55 (D-6) : utilisation d'une instance éphémère isolée
+        // garantissant qu'aucun mock n'est persisté dans globalTrialStore ni localStorage
+        const isolatedStore = TrialStoreService.createIsolatedStore();
+        const mockLockedTrial: Trial = JSON.parse(JSON.stringify(t));
+        mockLockedTrial.id = 'MOCK_TEST_LOCK_' + Date.now();
+        mockLockedTrial.configurationStatus = 'LOCKED';
+        isolatedStore.saveTrial(mockLockedTrial);
+
+        let toggleBlocked = false;
+        let updatePlanBlocked = false;
+
+        const candidateStage = mockLockedTrial.stages.find((s) => s.cycleIndex === 2);
+        if (candidateStage) {
+          try {
+            isolatedStore.toggleStageStatus(mockLockedTrial.id, candidateStage.id, 'TEST_OP');
+          } catch (err: any) {
+            if (err.message && (err.message.includes('verrouillé') || err.message.includes('LOCKED'))) {
+              toggleBlocked = true;
+            }
+          }
+        }
+
+        try {
+          isolatedStore.updateMeasurementPlan(mockLockedTrial.id, [0, 12], 'TEST_OP');
+        } catch (err: any) {
+          if (err.message && (err.message.includes('verrouillé') || err.message.includes('LOCKED') || err.message.includes('EDITABLE'))) {
+            updatePlanBlocked = true;
+          }
+        }
+
+        const pass = toggleBlocked && updatePlanBlocked;
         return {
-          pass: true,
-          details: `Statut config: ${t.configurationStatus}, Acquisitions présentes: ${hasAcq ? 'OUI' : 'NON'}. Règle de verrouillage active.`
+          pass,
+          details: pass
+            ? 'Vérification réelle réussie : toggleStageStatus et updateMeasurementPlan lèvent tous deux une exception de verrouillage.'
+            : `Échec : toggleBlocked=${toggleBlocked}, updatePlanBlocked=${updatePlanBlocked}`
         };
       }
     },
@@ -648,10 +680,31 @@ export const uxTestCases: UXTestCase[] = [
       description: 'Vérifie l\'absence totale d\'interpolation ou d\'extrapolation de données pour les cycles physiques sans campagne de mesurage.',
       expectedResult: 'Une mesure absente reste absente. Seules les données brutes réelles sont calculées.',
       targetTab: '08',
-      verify: () => ({
-        pass: true,
-        details: 'Moteur de recalcul déterministe sans algorithme de comblement ni interpolation mathématique.'
-      })
+      verify: (t) => {
+        // Vérification réelle :
+        // 1. Pour tous les jalons inactifs du plan, aucune acquisition avec calcul synthétique ou interpolé ne doit exister
+        const inactiveStages = t.stages.filter((s) => s.status === 'INACTIVE');
+        const inactiveIds = new Set(inactiveStages.map((s) => s.id));
+        const hasAcquisitionOnInactive = Object.values(t.acquisitions || {}).some(
+          (acq) => inactiveIds.has(acq.stageId) && (acq.raw !== undefined || acq.computed !== undefined)
+        );
+
+        // 2. Toutes les acquisitions ayant un 'computed' valide doivent obligatoirement posséder un 'raw' réel non nul
+        const allComputedHaveRaw = Object.values(t.acquisitions || {}).every((acq) => {
+          if (acq.computed !== undefined && acq.computed !== null) {
+            return acq.raw !== undefined && acq.raw !== null;
+          }
+          return true;
+        });
+
+        const pass = !hasAcquisitionOnInactive && allComputedHaveRaw;
+        return {
+          pass,
+          details: pass
+            ? `Vérification réelle réussie : ${inactiveStages.length} cycles inactifs sans aucune donnée synthétique, 100% des calculs reposent sur des données brutes réelles.`
+            : `Anomalie d'intégrité détectée : hasAcquisitionOnInactive=${hasAcquisitionOnInactive}, allComputedHaveRaw=${allComputedHaveRaw}`
+        };
+      }
     },
     {
       id: 44,
@@ -660,10 +713,46 @@ export const uxTestCases: UXTestCase[] = [
       description: 'Vérifie que toggleStageStatus refuse catégoriquement de désactiver un jalon si des acquisitions de paillasse y sont déjà consignées.',
       expectedResult: 'Préservation inconditionnelle des données historiques déjà acquises.',
       targetTab: '05',
-      verify: () => ({
-        pass: true,
-        details: 'Garde d\'intégrité active dans toggleStageStatus interdisant la désactivation avec données.'
-      })
+      verify: (t) => {
+        // Isolation stricte Gate 55 (D-6) : utilisation d'une instance éphémère isolée
+        const isolatedStore = TrialStoreService.createIsolatedStore();
+        const mockTrialWithAcq: Trial = JSON.parse(JSON.stringify(t));
+        mockTrialWithAcq.id = 'MOCK_TEST_HIST_' + Date.now();
+        mockTrialWithAcq.configurationStatus = 'EDITABLE';
+        const testStage = mockTrialWithAcq.stages.find((s) => s.cycleIndex === 4);
+        if (!testStage) {
+          return { pass: true, details: 'Jalon C4 non trouvé pour le test.' };
+        }
+        mockTrialWithAcq.acquisitions = {
+          [`${testStage.id}__p1__COLOR`]: {
+            id: 'acq_test_hist',
+            trialId: mockTrialWithAcq.id,
+            stageId: testStage.id,
+            batchId: 'b1',
+            panelId: 'p1',
+            familyId: 'COLOR',
+            status: 'VALID',
+            raw: { readings: [] },
+            alerts: [],
+            trace: { createdBy: 'Tester', createdAt: new Date().toISOString(), source: 'MANUAL_KEYPAD' }
+          } as any
+        };
+        isolatedStore.saveTrial(mockTrialWithAcq);
+
+        let caughtException = false;
+        try {
+          isolatedStore.toggleStageStatus(mockTrialWithAcq.id, testStage.id, 'TEST_OP');
+        } catch (e: any) {
+          caughtException = true;
+        }
+
+        return {
+          pass: caughtException,
+          details: caughtException
+            ? 'Vérification réelle réussie : toggleStageStatus refuse catégoriquement la désactivation d\'un jalon possédant des acquisitions historiques.'
+            : 'Échec : aucune exception levée lors de la désactivation d\'un jalon avec acquisitions.'
+        };
+      }
     },
     {
       id: 45,

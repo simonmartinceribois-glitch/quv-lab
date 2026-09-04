@@ -1253,10 +1253,21 @@ function recordAcquisitionDirect(
 export class TrialStoreService {
   private trials: Map<UUID, Trial> = new Map();
   private ruleSet: ScientificRuleSet;
+  private isEphemeral: boolean;
 
-  constructor() {
+  constructor(options?: { ephemeral?: boolean }) {
     this.ruleSet = getDefaultScientificRuleSet();
-    this.loadFromStorage();
+    this.isEphemeral = !!options?.ephemeral;
+    if (!this.isEphemeral) {
+      this.loadFromStorage();
+    }
+  }
+
+  /**
+   * Crée un store en mémoire isolé (éphémère) n'impactant ni le store global ni localStorage (Gate 55 - D-6).
+   */
+  public static createIsolatedStore(): TrialStoreService {
+    return new TrialStoreService({ ephemeral: true });
   }
 
   /**
@@ -1343,8 +1354,11 @@ export class TrialStoreService {
         const parsed = JSON.parse(stored) as Trial[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           parsed.forEach((t) => {
-            const migrated = this.migrateTrialTerminology(t);
-            this.trials.set(migrated.id, migrated);
+            // Éliminer préventivement toute pollution issue d'anciens mocks de test (Gate 55 - D-6)
+            if (t && t.id && !t.id.startsWith('MOCK_TEST_')) {
+              const migrated = this.migrateTrialTerminology(t);
+              this.trials.set(migrated.id, migrated);
+            }
           });
           return;
         }
@@ -1362,8 +1376,9 @@ export class TrialStoreService {
   }
 
   private saveToStorage(): void {
+    if (this.isEphemeral) return;
     try {
-      const list = Array.from(this.trials.values());
+      const list = Array.from(this.trials.values()).filter((t) => !t.id.startsWith('MOCK_TEST_'));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     } catch {
       // ignore
@@ -1434,6 +1449,11 @@ export class TrialStoreService {
     familyConfigs?: Partial<TrialProtocolConfig['familyConfigs']>;
     selectedMeasurementCycles?: number[];
   }): Trial {
+    const createdBy = params.metadata?.createdBy?.trim();
+    if (!createdBy) {
+      throw new Error('Le créateur de l’essai est obligatoire.');
+    }
+
     const trialId = generateUUID();
     const now = new Date().toISOString();
 
@@ -1541,7 +1561,7 @@ export class TrialStoreService {
         id: generateUUID(),
         trialId,
         timestamp: now,
-        operatorId: params.metadata.createdBy || 'OPERATOR',
+        operatorId: createdBy,
         action: 'CREATE_TRIAL',
         entityType: 'TRIAL',
         entityId: trialId,
@@ -1560,7 +1580,10 @@ export class TrialStoreService {
       schemaVersion: '1.2.0',
       createdAt: now,
       updatedAt: now,
-      metadata: params.metadata,
+      metadata: {
+        ...params.metadata,
+        createdBy
+      },
       commonCharacteristics: params.commonCharacteristics,
       status: 'IN_PROGRESS',
       configurationStatus: 'EDITABLE',
@@ -1725,7 +1748,16 @@ export class TrialStoreService {
 
     // Règle métier canonique : ADHESION = T0 + C12 uniquement. Interdit à C1..C11.
     const targetStage = trial.stages?.find((s) => s.id === params.stageId);
-    if (params.familyId === 'ADHESION' && targetStage && !isFamilyScheduledForStage('ADHESION', targetStage)) {
+    if (!targetStage) {
+      throw new Error(`Jalon ${params.stageId} introuvable dans l'essai.`);
+    }
+
+    // Protection défensive D-1 (Gate 54) : Bloquer toute acquisition sur un jalon exclu du plan (INACTIVE)
+    if (targetStage.status === 'INACTIVE') {
+      throw new Error("Ce jalon a été exclu du plan de mesurage ; aucune acquisition n'est autorisée.");
+    }
+
+    if (params.familyId === 'ADHESION' && !isFamilyScheduledForStage('ADHESION', targetStage)) {
       throw new Error(
         `La mesure d'adhérence au quadrillage (NF EN ISO 2409) est strictement interdite aux étapes intermédiaires (C1 à C11). Elle est planifiée uniquement à T0 et C12.`
       );
@@ -1882,6 +1914,14 @@ export class TrialStoreService {
       );
     }
 
+    // 3. Protection absolue du plan verrouillé (Gate 54 - D-2) :
+    // Dès la première acquisition ou lorsque la configuration est verrouillée, aucun changement de statut n'est permis.
+    if (trial.configurationStatus === 'LOCKED') {
+      throw new Error(
+        "Le plan de mesurage est verrouillé. Aucune modification du statut des jalons n'est autorisée après le démarrage ou le verrouillage de la campagne."
+      );
+    }
+
     let active: boolean;
     let operatorId: string;
     let reason: string | undefined;
@@ -1976,7 +2016,14 @@ export class TrialStoreService {
     }
 
     // T0 (0) et C12 (12) sont obligatoires
-    const normalizedPlan = Array.from(new Set([0, 12, ...activeCycleIndices]));
+    if (!activeCycleIndices.includes(0)) {
+      throw new Error('Le jalon initial T0 (0 h) est obligatoire et ne peut pas être exclu du plan de mesurage.');
+    }
+    if (!activeCycleIndices.includes(12)) {
+      throw new Error('Le jalon final C12 (2016 h) est obligatoire et ne peut pas être exclu du plan de mesurage.');
+    }
+
+    const normalizedPlan = Array.from(new Set(activeCycleIndices));
 
     trial.stages.forEach((stage) => {
       if (stage.cycleIndex === 0 || stage.cycleIndex === 12) {
@@ -2101,7 +2148,23 @@ export class TrialStoreService {
       if (replacedMediaId) {
         obsRec.mediaIds = obsRec.mediaIds.filter((id) => id !== replacedMediaId);
       }
-      obsRec.mediaIds = [...obsRec.mediaIds, media.id];
+      if (!obsRec.mediaIds.includes(media.id)) {
+        obsRec.mediaIds = [...obsRec.mediaIds, media.id];
+      }
+    }
+
+    // Assurer également le remplacement cohérent sans doublon pour toute acquisition référençant l'ancienne photo
+    if (replacedMediaId) {
+      Object.values(trial.acquisitions).forEach((acq) => {
+        if (acq.stageId === params.stageId && acq.panelId === params.panelId && Array.isArray(acq.mediaIds)) {
+          if (acq.mediaIds.includes(replacedMediaId)) {
+            acq.mediaIds = acq.mediaIds.filter((id) => id !== replacedMediaId);
+            if (!acq.mediaIds.includes(media.id)) {
+              acq.mediaIds.push(media.id);
+            }
+          }
+        }
+      });
     }
 
     trial.auditTrail.push({
@@ -2126,6 +2189,19 @@ export class TrialStoreService {
 
   /**
    * Supprime une référence de photographie
+   * 
+   * NOTE D'ARCHITECTURE SUR LA TRAÇABILITÉ :
+   * L'opérateur passé en argument (operatorId) trace l'auteur de l'action dans l'audit trail.
+   * L'application ne disposant pas encore d'un système de session utilisateur / utilisateur connecté,
+   * trial.metadata.createdBy ou un identifiant fourni est actuellement utilisé comme fallback.
+   * 
+   * INTÉGRITÉ SCIENTIFIQUE & MÉDIAS (MESURE ≠ PHOTO) :
+   * La suppression d'une photographie ne supprime JAMAIS l'acquisition correspondante.
+   * Elle préserve strictement les données scientifiques de l'acquisition :
+   * - acq.status reste inchangé (ex: COMPLETE)
+   * - acq.raw reste inchangé
+   * - acq.computed reste inchangé
+   * Seule la référence dans acq.mediaIds est nettoyée pour garantir l'intégrité référentielle.
    */
   public deletePhoto(trialId: UUID, mediaId: UUID, operatorId: string): Trial {
     const trial = this.getTrial(trialId);

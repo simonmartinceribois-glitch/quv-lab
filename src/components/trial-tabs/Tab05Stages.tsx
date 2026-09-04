@@ -26,7 +26,8 @@ import {
   X,
   Power,
   RotateCcw,
-  Ban
+  Ban,
+  Lock
 } from 'lucide-react';
 
 interface Props {
@@ -44,7 +45,18 @@ export function Tab05Stages({
   onNavigateToFamilyBench,
   onTrialUpdated
 }: Props) {
-  const currentStage = trial.stages.find((s) => s.id === selectedStageId) || trial.stages[0];
+  // Gate 54 (D-1) : seuls les jalons actifs font partie du plan de mesurage.
+  // Un jalon INACTIVE ne doit jamais pouvoir être sélectionné pour le banc de mesure.
+  const activeStages = trial.stages.filter((s) => s.status !== 'INACTIVE');
+  const currentStage = activeStages.find((s) => s.id === selectedStageId) || activeStages[0] || trial.stages[0];
+
+  // Si selectedStageId est inactif ou introuvable parmi les actifs, synchroniser avec le parent
+  React.useEffect(() => {
+    const isSelectedActive = activeStages.some((s) => s.id === selectedStageId);
+    if (!isSelectedActive && currentStage && currentStage.status !== 'INACTIVE') {
+      onSelectStageId(currentStage.id);
+    }
+  }, [selectedStageId, activeStages, currentStage, onSelectStageId]);
 
   const [actualHours, setActualHours] = useState<string>(
     currentStage.actualExposureHours !== undefined ? currentStage.actualExposureHours.toString() : ''
@@ -60,6 +72,10 @@ export function Tab05Stages({
   const isMandatory = isMandatoryStage(currentStage);
   const isInactive = currentStage.status === 'INACTIVE';
   const isValidated = currentStage.status === 'VALIDATED';
+
+  // Gate 54 (D-2) : verrouillage strict du plan après la 1ère acquisition
+  const hasAcquisitions = Object.keys(trial.acquisitions || {}).length > 0;
+  const isPlanLocked = trial.configurationStatus === 'LOCKED' || hasAcquisitions;
 
   const activePanels = trial.batches.flatMap((b) => b.panels).filter((p) => p.status === 'ACTIVE');
   const totalActivePanelsCount = activePanels.length;
@@ -120,6 +136,15 @@ export function Tab05Stages({
   };
 
   const handleToggleStatus = (targetActive: boolean) => {
+    if (isPlanLocked) {
+      setStatusMessage({
+        type: 'error',
+        text: "Le plan de mesurage est verrouillé. Aucune modification du statut des étapes n'est autorisée après le démarrage de la campagne."
+      });
+      setTimeout(() => setStatusMessage(null), 4000);
+      return;
+    }
+
     try {
       globalTrialStore.toggleStageStatus(
         trial.id,
@@ -174,7 +199,10 @@ export function Tab05Stages({
           return (
             <button
               key={stage.id}
+              disabled={isStInactive}
+              title={isStInactive ? "Cycle physique exclu du plan de mesurage (sélection interdite)" : undefined}
               onClick={() => {
+                if (isStInactive) return;
                 onSelectStageId(stage.id);
                 setActualHours(stage.actualExposureHours !== undefined ? stage.actualExposureHours.toString() : '');
               }}
@@ -182,7 +210,7 @@ export function Tab05Stages({
                 isSelected
                   ? 'bg-blue-600 text-white shadow-xs'
                   : isStInactive
-                  ? 'bg-slate-100 text-slate-400 line-through border border-dashed border-slate-300'
+                  ? 'bg-slate-100 text-slate-400 line-through border border-dashed border-slate-300 opacity-60 cursor-not-allowed'
                   : isVal
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : isInProg
@@ -195,6 +223,7 @@ export function Tab05Stages({
               {isStInactive && <Ban className="w-3.5 h-3.5 text-slate-400" />}
               {stage.cycleIndex === 0 ? 'T0 (0 h)' : `${stage.scheduledExposureHours} h`}
               {isStMandatory && <span className="text-[9px] px-1 bg-amber-200 text-amber-900 rounded">REQ</span>}
+              {isStInactive && <span className="text-[9px] px-1 bg-slate-200 text-slate-500 rounded font-normal">EXCLU</span>}
             </button>
           );
         })}
@@ -232,7 +261,12 @@ export function Tab05Stages({
 
           <div className="flex items-center gap-3">
             {/* Bouton de désactivation/réactivation du jalon */}
-            {!isMandatory ? (
+            {isPlanLocked ? (
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 bg-slate-100 py-1.5 px-3 rounded-xl border border-slate-200" title="Plan de mesurage verrouillé">
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                Plan verrouillé
+              </span>
+            ) : !isMandatory ? (
               isInactive ? (
                 <button
                   type="button"
@@ -422,13 +456,20 @@ export function Tab05Stages({
           <p className="text-xs text-slate-500 max-w-md mx-auto">
             Cette étape intermédiaire a été exclue de l'échéancier des mesures. Les données historiques éventuellement existantes sont conservées en base sans être altérées.
           </p>
-          <button
-            type="button"
-            onClick={() => handleToggleStatus(true)}
-            className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl"
-          >
-            Réactiver cette étape
-          </button>
+          {!isPlanLocked ? (
+            <button
+              type="button"
+              onClick={() => handleToggleStatus(true)}
+              className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs"
+            >
+              Réactiver cette étape
+            </button>
+          ) : (
+            <p className="text-xs text-amber-800 font-medium mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+              <Lock className="w-3.5 h-3.5 text-amber-600" />
+              Réactivation impossible : le plan de mesurage est verrouillé suite aux acquisitions.
+            </p>
+          )}
         </div>
       )}
 

@@ -43,7 +43,8 @@ import {
   Zap,
   Info,
   Sliders,
-  ShieldCheck
+  ShieldCheck,
+  Ban
 } from 'lucide-react';
 
 interface Props {
@@ -65,13 +66,26 @@ export function Tab06MeasurementsBench({
   onFamilyChange,
   onTrialUpdated
 }: Props) {
-  // Jalons de mesurage actifs selon le plan pour la famille sélectionnée (ex: ADHESION = T0 + C12 uniquement)
-  const measuredStages = trial.stages.filter(
-    (s) => s.status !== 'INACTIVE' && isFamilyScheduledForStage(selectedFamilyId, s)
+  // Gate 54 (D-1 / D-2 UI) : Les jalons INACTIVE sont exclus du plan de mesurage.
+  // currentStage doit impérativement être résolu parmi les jalons actifs.
+  const activeStages = trial.stages.filter((s) => s.status !== 'INACTIVE');
+  const measuredStages = activeStages.filter(
+    (s) => isFamilyScheduledForStage(selectedFamilyId, s)
   );
   const currentStage =
-    trial.stages.find((s) => s.id === selectedStageId) || measuredStages[0] || trial.stages[0];
+    activeStages.find((s) => s.id === selectedStageId) || measuredStages[0] || activeStages[0] || trial.stages[0];
   const isInitialStage = currentStage.cycleIndex === 0;
+  const isStageInactive = currentStage.status === 'INACTIVE';
+
+  // Synchronisation avec le parent si selectedStageId transmis était inactif
+  useEffect(() => {
+    if (selectedStageId && onStageChange) {
+      const isSelectedActive = activeStages.some((s) => s.id === selectedStageId);
+      if (!isSelectedActive && currentStage && currentStage.status !== 'INACTIVE') {
+        onStageChange(currentStage.id);
+      }
+    }
+  }, [selectedStageId, activeStages, currentStage, onStageChange]);
 
   // Redirection automatique si la famille actuelle n'est pas planifiée au jalon sélectionné (ex: ADHESION sur C1..C11)
   useEffect(() => {
@@ -215,6 +229,10 @@ export function Tab06MeasurementsBench({
   // Fonction d'enregistrement du panneau courant
   const handleSaveCurrentPanel = (autoAdvance = true) => {
     if (!currentPanel || !currentBatch) return;
+    if (currentStage.status === 'INACTIVE') {
+      alert("Ce jalon a été exclu du plan de mesurage ; aucune acquisition n'est autorisée.");
+      return;
+    }
 
     let rawPayload: unknown = null;
 
@@ -447,6 +465,14 @@ export function Tab06MeasurementsBench({
           </div>
         </div>
       </div>
+
+      {/* Alerte jalon inactif (Gate 54 D-1 / D-2 UI) */}
+      {isStageInactive && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-800 text-xs font-bold shadow-xs">
+          <Ban className="w-5 h-5 text-rose-600 shrink-0" />
+          <span>Ce jalon n'est pas actif dans le plan de mesurage. La saisie et l'enregistrement de mesures y sont strictement interdits.</span>
+        </div>
+      )}
 
       {/* 2. GRILLE PANORAMIQUE DES ÉPROUVETTES */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
@@ -980,16 +1006,26 @@ export function Tab06MeasurementsBench({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
+                  disabled={isStageInactive}
                   onClick={() => handleSaveCurrentPanel(false)}
-                  className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all ${
+                    isStageInactive
+                      ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300'
+                  }`}
                 >
                   <Save className="w-4 h-4" />
                   Enregistrer
                 </button>
                 <button
                   type="button"
+                  disabled={isStageInactive}
                   onClick={() => handleSaveCurrentPanel(true)}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+                  className={`px-6 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all ${
+                    isStageInactive
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-lg'
+                  }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   Valider ce Panneau & Passer au Suivant

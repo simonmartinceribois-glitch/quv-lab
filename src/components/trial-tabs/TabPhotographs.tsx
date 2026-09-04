@@ -303,7 +303,21 @@ export function TabPhotographs({ trial, onTrialUpdated }: Props) {
   };
 
   const handleDeletePhoto = (mediaId: string) => {
-    if (!window.confirm('Confirmez-vous la suppression de cette photographie ?')) return;
+    // 1. Rechercher si le mediaId est actuellement référencé dans acquisitions[*].mediaIds
+    const referencingAcquisitions = Object.values(trial.acquisitions || {}).filter(
+      (acq) => Array.isArray(acq.mediaIds) && acq.mediaIds.includes(mediaId)
+    );
+
+    // 2. Déterminer le message de confirmation selon la présence de références
+    const confirmMessage =
+      referencingAcquisitions.length > 0
+        ? "Cette photographie est associée à une observation enregistrée. La supprimer n'affectera pas les données de mesure, mais supprimera la preuve photographique associée. Confirmer la suppression ?"
+        : 'Confirmez-vous la suppression de cette photographie ?';
+
+    if (!window.confirm(confirmMessage)) return;
+
+    // Traçabilité de suppression dans l'audit trail
+    // Note d'architecture : opérateur passé via createdBy à défaut d'une session utilisateur connectée
     globalTrialStore.deletePhoto(trial.id, mediaId, trial.metadata.createdBy || 'OPERATOR');
     if (lightboxMedia?.id === mediaId) {
       setLightboxMedia(null);

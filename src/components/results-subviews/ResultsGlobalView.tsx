@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Trial, ExposureStage } from '../../types/trial';
 import { ScientificRuleSet } from '../../types/scientific';
+import { getActiveFamiliesForStage, isFamilyScheduledForStage } from '../../scientific/panelUtils';
 import {
   Layers,
   Clock,
@@ -45,9 +46,12 @@ export function ResultsGlobalView({
   const inProgressStages = trial.stages.filter((s) => s.status === 'IN_PROGRESS').length;
   const notStartedStages = trial.stages.filter((s) => s.status === 'NOT_STARTED').length;
 
-  // Calcul du volume d'acquisitions attendues vs réalisées
-  const activeFamiliesCount = trial.config.activeFamilies.length;
-  const expectedAcquisitionsTotal = totalStages * totalPanels * activeFamiliesCount;
+  // Calcul du volume d'acquisitions attendues vs réalisées jalon par jalon
+  const expectedAcquisitionsTotal = trial.stages.reduce((acc, stage) => {
+    if (stage.status === 'INACTIVE') return acc;
+    const applicable = getActiveFamiliesForStage(trial.config.activeFamilies, stage);
+    return acc + (activePanels * applicable.length);
+  }, 0);
 
   let realizedCount = 0;
   let invalidCount = 0;
@@ -193,8 +197,11 @@ export function ResultsGlobalView({
 
             // Nombre de relevés pour cette étape
             const stageAcqs = Object.values(trial.acquisitions).filter((a) => a.stageId === stage.id);
-            const stageRealized = stageAcqs.length;
-            const stageExpected = totalPanels * activeFamiliesCount;
+            const stageRealized = stageAcqs.filter((a) => a.raw).length;
+            const stageApplicableFamilies = stage.status === 'INACTIVE'
+              ? []
+              : getActiveFamiliesForStage(trial.config.activeFamilies, stage);
+            const stageExpected = activePanels * stageApplicableFamilies.length;
             const stageWarnings = stageAcqs.filter((a) => a.alerts.some((x) => x.severity === 'WARNING')).length;
             const stageErrors = stageAcqs.filter((a) => a.alerts.some((x) => x.severity === 'BLOCKING')).length;
 
@@ -346,8 +353,14 @@ export function ResultsGlobalView({
                       </td>
 
                       {trial.stages.map((stage) => {
-                        const familiesToCheck =
-                          filterFamily === 'ALL' ? trial.config.activeFamilies : [filterFamily as any];
+                        const baseFamilies = filterFamily === 'ALL'
+                          ? trial.config.activeFamilies
+                          : trial.config.activeFamilies.includes(filterFamily as any)
+                          ? [filterFamily as any]
+                          : [];
+                        const familiesToCheck = stage.status === 'INACTIVE'
+                          ? []
+                          : getActiveFamiliesForStage(baseFamilies, stage);
 
                         let hasError = false;
                         let hasWarning = false;
@@ -366,13 +379,16 @@ export function ResultsGlobalView({
                           }
                         });
 
-                        const isComplete = filledCount === familiesToCheck.length;
-                        const isPartial = filledCount > 0 && filledCount < familiesToCheck.length;
+                        const isApplicable = familiesToCheck.length > 0;
+                        const isComplete = isApplicable && filledCount === familiesToCheck.length;
+                        const isPartial = isApplicable && filledCount > 0 && filledCount < familiesToCheck.length;
 
                         return (
                           <td key={stage.id} className="p-1.5 text-center border-r border-slate-100 last:border-r-0">
                             {panel.status === 'EXCLUDED' ? (
-                              <span className="text-slate-300 text-[11px]">—</span>
+                              <span className="text-slate-300 text-[11px]" title="Éprouvette exclue">—</span>
+                            ) : !isApplicable ? (
+                              <span className="text-slate-300 text-xs" title="Non applicable à ce jalon">—</span>
                             ) : hasError ? (
                               <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-rose-100 text-rose-700 font-black text-xs" title="Erreur bloquante sur le relevé">
                                 ✕

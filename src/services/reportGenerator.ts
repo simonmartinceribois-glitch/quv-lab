@@ -13,6 +13,7 @@ import {
   ScientificReportReviewComment
 } from '../types/scientific';
 import { generateUUID } from './trialStore';
+import { getActiveExposedPanels } from '../scientific/panelUtils';
 
 export const REPORT_SCHEMA_VERSION = '1.2.0';
 export const REPORT_GENERATOR_VERSION = 'v1.2.0';
@@ -164,6 +165,12 @@ export function buildScientificReport(
   const protocolStatus =
     adaptedFamilies.length > 0 ? 'ADAPTED_JUSTIFIED' : 'STANDARD';
 
+  // GATE 55 — SÉGRÉGATION TÉMOIN / EXPOSÉ :
+  // Le panneau Témoin T, conservé à l'obscurité, ne doit JAMAIS entrer dans les calculs
+  // statistiques ou agrégations des panneaux exposés E1, E2, E3.
+  const activeExposedPanels = getActiveExposedPanels(allPanels);
+  const activeExposedPanelIds = new Set(activeExposedPanels.map((p) => p.id));
+
   // Synthèse des calculs sans JAMAIS recalculer localement
   let maxDeltaE = 0;
   let maxDeltaEPanel = '';
@@ -171,6 +178,11 @@ export function buildScientificReport(
   let minRetentionPanel = '';
 
   Object.entries(trial.acquisitions).forEach(([key, acq]) => {
+    // Exclusion formelle du Témoin T et des éprouvettes non actives ou non exposées
+    if (!activeExposedPanelIds.has(acq.panelId)) {
+      return;
+    }
+
     if (acq.familyId === 'COLOR' && acq.computed) {
       const dE = (acq.computed as any).deltaE;
       if (typeof dE === 'number' && dE > maxDeltaE) {

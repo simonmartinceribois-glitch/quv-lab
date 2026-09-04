@@ -316,9 +316,11 @@ export function ResultsPanelAnalysisView({
                               : 'RÉF'}
                           </td>
                           <td className="p-2.5 font-mono bg-emerald-50 text-emerald-950 font-black text-right">
-                            {comp?.retentionRatePercent !== null && comp?.retentionRatePercent !== undefined
+                            {stage.cycleIndex === 0 && comp?.meanGloss !== null && comp?.meanGloss !== undefined
+                              ? '100.0 %'
+                              : comp?.retentionRatePercent !== null && comp?.retentionRatePercent !== undefined
                               ? `${comp.retentionRatePercent.toFixed(1)} %`
-                              : '100.0 %'}
+                              : '—'}
                           </td>
                         </>
                       )}
